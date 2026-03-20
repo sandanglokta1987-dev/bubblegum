@@ -280,9 +280,7 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
 
   <!-- MODE SWITCHER -->
   <div class="mode-switcher">
-    <button class="mode-btn active" id="modeScanner">Scanner</button>
-    <button class="mode-btn" id="modeExtractor">Form Extractor</button>
-    <button class="mode-btn" id="modeVuln">Vuln Scanner</button>
+    <button class="mode-btn active" id="modeVuln">Vuln Scanner</button>
     <button class="mode-btn" id="modeUpload">Upload PDF</button>
   </div>
 
@@ -334,7 +332,7 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
         </select>
       </div>
     </div>
-    <div id="scannerConfig">
+    <div id="scannerConfig" class="hidden">
       <div class="field">
         <label>Spammer URL <span class="opt">from Google abuse email</span></label>
         <input type="text" id="urlInput" placeholder="https://victim-site.com/wp-content/uploads/spam.pdf"/>
@@ -365,7 +363,7 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
         <span class="live-badge hidden" id="feLiveBadge">extracting...</span>
       </div>
     </div>
-    <div id="vulnConfig" class="hidden">
+    <div id="vulnConfig">
       <div id="vsPdfDrop" onclick="document.getElementById('vsPdfInput').click()">
         Drop a dummy PDF here or click to browse
         <input type="file" id="vsPdfInput" accept=".pdf" style="display:none">
@@ -826,7 +824,7 @@ let aiPluginKeywords = []; // extra keywords from AI analysis
 let feState = 'idle';       // idle | scanning | paused | stopped
 let feResults = [];          // [{url, forms: [{plugin, is_multi_step, fields: [...]}], tier}]
 let feCreditsUsed = 0;
-let currentMode = 'scanner'; // 'scanner' | 'extractor' | 'vuln' | 'upload'
+let currentMode = 'vuln'; // 'vuln' | 'upload'
 let uploadMode = 'auto'; // 'auto' | 'form_page' | 'direct'
 let uploadPdfFile = null;     // File object from picker
 let currentTier = 'basic';   // 'basic' | 'firecrawl' | 'ai'
@@ -2135,8 +2133,6 @@ async function reAnalyzeWithAI() {
 
 function switchMode(mode) {
   currentMode = mode;
-  $('modeScanner').className = mode === 'scanner' ? 'mode-btn active' : 'mode-btn';
-  $('modeExtractor').className = mode === 'extractor' ? 'mode-btn active' : 'mode-btn';
   $('modeVuln').className = mode === 'vuln' ? 'mode-btn active' : 'mode-btn';
   $('modeUpload').className = mode === 'upload' ? 'mode-btn active' : 'mode-btn';
 
