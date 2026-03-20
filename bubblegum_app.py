@@ -2373,10 +2373,12 @@ class PdfUploader:
         form_paths = [
             '/contact', '/contact-us', '/apply', '/get-involved', '/volunteer',
             '/join', '/submit', '/upload', '/registration', '/register',
-            '/careers', '/scholarship', '/application', '/enrollment',
-            '/inquiry', '/request', '/feedback', '/support', '/events',
-            '/submit-event', '/add-event', '/post-event', '/listing',
-            '/add-listing', '/submit-listing', '/resume', '/job',
+            '/careers', '/scholarship', '/scholarship-application', '/application',
+            '/enrollment', '/inquiry', '/request', '/feedback', '/support',
+            '/events', '/submit-event', '/add-event', '/post-event', '/listing',
+            '/add-listing', '/submit-listing', '/resume', '/job', '/internship',
+            '/membership', '/donate', '/grant', '/award', '/nominate',
+            '/report', '/complaint', '/claim', '/intake', '/referral',
         ]
 
         # Step 1: Find a page with a file upload input
