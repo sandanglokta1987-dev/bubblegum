@@ -1,0 +1,7 @@
+build/
+dist/
+dist_new/
+__pycache__/
+*.spec
+test_sel.py
+
