@@ -1,6 +1,7 @@
 """
 BubbleGum — Machine-Bound Launcher
 Serves bubblegum.html via localhost, with hardware-locked activation.
+Auto-updates from GitHub on startup.
 """
 
 import base64
@@ -23,6 +24,115 @@ import webbrowser
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
+
+
+# ── Auto-Updater ─────────────────────────────────────────────────────────────
+
+GITHUB_REPO = "sandanglokta1987-dev/bubblegum"
+UPDATE_FILES = ["bubblegum_app.py", "bubblegum.html"]
+UPDATE_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "BubbleGum")
+
+
+def _get_update_dir():
+    """Ensure update directory exists and return its path."""
+    os.makedirs(UPDATE_DIR, exist_ok=True)
+    return UPDATE_DIR
+
+
+def _read_local_sha():
+    """Read stored commit SHA from last update."""
+    sha_file = os.path.join(_get_update_dir(), ".version")
+    if os.path.exists(sha_file):
+        return open(sha_file, 'r').read().strip()
+    return ""
+
+
+def _write_local_sha(sha):
+    """Store commit SHA after successful update."""
+    sha_file = os.path.join(_get_update_dir(), ".version")
+    with open(sha_file, 'w') as f:
+        f.write(sha)
+
+
+def _fetch_json(url):
+    """GET a GitHub API URL, return parsed JSON."""
+    req = urllib.request.Request(url, headers={
+        'User-Agent': 'BubbleGum-Updater/1.0',
+        'Accept': 'application/vnd.github.v3+json',
+    })
+    ctx = ssl.create_default_context()
+    resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+    return json.loads(resp.read().decode())
+
+
+def _download_raw(url):
+    """Download raw file content from GitHub."""
+    req = urllib.request.Request(url, headers={
+        'User-Agent': 'BubbleGum-Updater/1.0',
+        'Accept': 'application/vnd.github.v3.raw',
+    })
+    ctx = ssl.create_default_context()
+    resp = urllib.request.urlopen(req, timeout=30, context=ctx)
+    return resp.read()
+
+
+def auto_update():
+    """Check GitHub for updates, download newer files to APPDATA.
+    Returns True if bubblegum_app.py was updated (needs re-exec)."""
+    try:
+        # Get latest commit SHA on default branch
+        api_url = f"https://api.github.com/repos/{GITHUB_REPO}/commits/master"
+        commit = _fetch_json(api_url)
+        remote_sha = commit["sha"]
+
+        local_sha = _read_local_sha()
+        if remote_sha == local_sha:
+            print("[updater] Already up to date.")
+            return False
+
+        print(f"[updater] Update available: {remote_sha[:8]}")
+        app_updated = False
+        update_dir = _get_update_dir()
+
+        for filename in UPDATE_FILES:
+            raw_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{filename}?ref=master"
+            content = _download_raw(raw_url)
+            dest = os.path.join(update_dir, filename)
+            with open(dest, 'wb') as f:
+                f.write(content)
+            print(f"[updater] Updated {filename} ({len(content)} bytes)")
+            if filename == "bubblegum_app.py":
+                app_updated = True
+
+        _write_local_sha(remote_sha)
+        print(f"[updater] Update complete: {remote_sha[:8]}")
+        return app_updated
+
+    except Exception as e:
+        print(f"[updater] Update check failed (offline?): {e}")
+        return False
+
+
+def _maybe_reexec():
+    """If a newer bubblegum_app.py exists in APPDATA, exec it instead."""
+    update_dir = _get_update_dir()
+    updated_app = os.path.join(update_dir, "bubblegum_app.py")
+
+    if not os.path.exists(updated_app):
+        return  # No update yet, run bundled code
+
+    # Don't re-exec if we're already running from the update dir
+    current_file = os.path.abspath(__file__)
+    if os.path.normpath(current_file) == os.path.normpath(updated_app):
+        return  # Already running updated code
+
+    # For frozen exe: exec the updated .py using the embedded Python
+    # For source: exec the updated .py
+    print(f"[updater] Loading updated code from {updated_app}")
+    with open(updated_app, 'r', encoding='utf-8') as f:
+        code = f.read()
+    # Execute the updated module in place of this one
+    exec(compile(code, updated_app, 'exec'), {'__name__': '__main__', '__file__': updated_app})
 
 # ── Shared secret (obfuscated in compiled bytecode) ──────────────────────────
 # Same value must appear in keygen.py
@@ -2693,7 +2803,10 @@ class PdfUploader:
 
 
 def get_serve_dir():
-    """Directory containing bubblegum.html."""
+    """Directory containing bubblegum.html. Prefers APPDATA updated copy."""
+    updated_html = os.path.join(UPDATE_DIR, "bubblegum.html")
+    if os.path.exists(updated_html):
+        return UPDATE_DIR
     if getattr(sys, "frozen", False):
         return sys._MEIPASS
     return os.path.dirname(os.path.abspath(__file__))
@@ -3014,6 +3127,13 @@ def main():
         if not show_activation_dialog():
             sys.exit(0)
 
+    # Auto-update from GitHub before starting server
+    app_updated = auto_update()
+    if app_updated:
+        # bubblegum_app.py itself was updated — re-exec the new version
+        # This call won't return; it replaces the current process
+        _maybe_reexec()
+
     server = start_server()
     url = f"http://127.0.0.1:{PORT}/bubblegum.html"
 
@@ -3031,4 +3151,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # If an updated bubblegum_app.py exists in APPDATA, run that instead
+    _maybe_reexec()
     main()
