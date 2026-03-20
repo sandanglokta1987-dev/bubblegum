@@ -3878,13 +3878,30 @@ class QuietHandler(SimpleHTTPRequestHandler):
                             'challenges.cloudflare.com', 'sucuri.net', 'imunify360']
             is_waf = any(p in html_text.lower() for p in waf_patterns)
 
-            if is_waf or (len(data) < 1024 and real_status in (202, 403, 503)):
-                # Retry with headless browser
-                browser_data = self._proxy_via_browser(url)
-                if browser_data and len(browser_data) > len(data):
-                    data = browser_data
-                    real_status = 200
-                    final_url = url
+            # Also detect JS-rendered forms: page has form plugin scripts but no <form> tags
+            js_form_sigs = ['ninja-forms', 'wpforms', 'gravityforms', 'formidable',
+                            'elementor', 'forminator', 'caldera', 'nf-form', 'gform',
+                            'wp-event-manager', 'wpem', 'fluent-form']
+            has_js_forms = any(sig in html_text.lower() for sig in js_form_sigs)
+            has_html_forms = '<form' in html_text.lower()
+            needs_browser = is_waf or (has_js_forms and not has_html_forms)
+
+            print(f"[proxy] {url} → {len(data)} bytes, status={real_status}, waf={is_waf}, js_forms={has_js_forms}, html_forms={has_html_forms}", flush=True)
+
+            if needs_browser or (len(data) < 1024 and real_status in (202, 403, 503)):
+                print(f"[proxy] WAF detected, launching browser...", flush=True)
+                try:
+                    browser_data = self._proxy_via_browser(url)
+                    print(f"[proxy] Browser returned: {len(browser_data) if browser_data else 'None'} bytes", flush=True)
+                    if browser_data and len(browser_data) > len(data):
+                        data = browser_data
+                        real_status = 200
+                        final_url = url
+                        print(f"[proxy] Using browser data", flush=True)
+                except Exception as e:
+                    print(f"[proxy] Browser FAILED: {type(e).__name__}: {e}", flush=True)
+                    import traceback
+                    traceback.print_exc()
 
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
