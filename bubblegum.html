@@ -280,8 +280,8 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
 
   <!-- MODE SWITCHER -->
   <div class="mode-switcher">
-    <button class="mode-btn active" id="modeVuln">Vuln Scanner</button>
-    <button class="mode-btn" id="modeUpload">Upload PDF</button>
+    <button class="mode-btn active" id="modeUpload">Upload PDF</button>
+    <button class="mode-btn" id="modeExtractor">Form Extractor</button>
   </div>
 
   <!-- CONFIG CARD -->
@@ -363,7 +363,7 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
         <span class="live-badge hidden" id="feLiveBadge">extracting...</span>
       </div>
     </div>
-    <div id="vulnConfig">
+    <div id="vulnConfig" class="hidden">
       <div id="vsPdfDrop" onclick="document.getElementById('vsPdfInput').click()">
         Drop a dummy PDF here or click to browse
         <input type="file" id="vsPdfInput" accept=".pdf" style="display:none">
@@ -389,7 +389,7 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
         <span class="live-badge hidden" id="vsLiveBadge">scanning...</span>
       </div>
     </div>
-    <div id="uploadConfig" class="hidden">
+    <div id="uploadConfig">
       <div class="tier-switcher" id="uploadModeSwitcher">
         <button class="tier-btn active" data-umode="auto">Auto (Spammer URL)</button>
         <button class="tier-btn" data-umode="form_page">Form Page URL</button>
@@ -824,7 +824,7 @@ let aiPluginKeywords = []; // extra keywords from AI analysis
 let feState = 'idle';       // idle | scanning | paused | stopped
 let feResults = [];          // [{url, forms: [{plugin, is_multi_step, fields: [...]}], tier}]
 let feCreditsUsed = 0;
-let currentMode = 'vuln'; // 'vuln' | 'upload'
+let currentMode = 'upload'; // 'upload' | 'extractor'
 let uploadMode = 'auto'; // 'auto' | 'form_page' | 'direct'
 let uploadPdfFile = null;     // File object from picker
 let currentTier = 'basic';   // 'basic' | 'firecrawl' | 'ai'
@@ -2133,8 +2133,8 @@ async function reAnalyzeWithAI() {
 
 function switchMode(mode) {
   currentMode = mode;
-  $('modeVuln').className = mode === 'vuln' ? 'mode-btn active' : 'mode-btn';
   $('modeUpload').className = mode === 'upload' ? 'mode-btn active' : 'mode-btn';
+  $('modeExtractor').className = mode === 'extractor' ? 'mode-btn active' : 'mode-btn';
 
   // Hide all config sections first
   hide('scannerConfig');
@@ -3537,10 +3537,8 @@ function stopScan() {
   });
 
   // Mode switcher
-  $('modeScanner').addEventListener('click', () => switchMode('scanner'));
-  $('modeExtractor').addEventListener('click', () => switchMode('extractor'));
-  $('modeVuln').addEventListener('click', () => switchMode('vuln'));
   $('modeUpload').addEventListener('click', () => switchMode('upload'));
+  $('modeExtractor').addEventListener('click', () => switchMode('extractor'));
 
   // Upload PDF event listeners
   $('uploadPdfInput').addEventListener('change', uploadPdfPicked);
