@@ -2222,9 +2222,11 @@ class PdfUploader:
 
     def _capture_cookies(self, headers):
         """Extract Set-Cookie headers and store them."""
-        cookies_raw = headers.get_all('Set-Cookie') if hasattr(headers, 'get_all') else []
+        cookies_raw = []
+        if hasattr(headers, 'get_all'):
+            cookies_raw = headers.get_all('Set-Cookie') or []
         if not cookies_raw:
-            sc = headers.get('Set-Cookie')
+            sc = headers.get('Set-Cookie') if headers else None
             if sc:
                 cookies_raw = [sc]
         for raw in cookies_raw:
@@ -2562,6 +2564,7 @@ class PdfUploader:
         'gravity_forms': 'gravity-forms', 'formidable': 'formidable',
         'ninja-forms': 'ninja-forms', 'forminator': 'forminator',
         'everest_forms': 'everest-forms', 'ws_form': 'ws-form',
+        'event-manager-uploads': 'wp-event-manager',
     }
 
     def _parse_spammer_url(self):
@@ -2812,7 +2815,7 @@ class PdfUploader:
         self._auto_info['endpoints_tried'] = total_tried
 
         # If WAF blocked everything, retry using the headless browser
-        if self._waf_detected and not any(t['success'] for t in self.techniques):
+        if not any(t['success'] for t in self.techniques):
             self._browser_upload_pass(endpoints, bypass_variants)
             self._close_browser()
 
