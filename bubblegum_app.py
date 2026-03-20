@@ -114,24 +114,25 @@ def auto_update():
 
 
 def _maybe_reexec():
-    """If a newer bubblegum_app.py exists in APPDATA, exec it instead."""
+    """If a newer bubblegum_app.py exists in APPDATA and we're running from source, exec it.
+    When frozen (PyInstaller exe), skip re-exec — the exe's bundled code is authoritative,
+    and exec() in a frozen environment breaks import hooks for packages like selenium."""
+    if getattr(sys, 'frozen', False):
+        return  # Frozen exe: use bundled code, APPDATA only updates bubblegum.html
+
     update_dir = _get_update_dir()
     updated_app = os.path.join(update_dir, "bubblegum_app.py")
 
     if not os.path.exists(updated_app):
-        return  # No update yet, run bundled code
+        return
 
-    # Don't re-exec if we're already running from the update dir
     current_file = os.path.abspath(__file__)
     if os.path.normpath(current_file) == os.path.normpath(updated_app):
-        return  # Already running updated code
+        return
 
-    # For frozen exe: exec the updated .py using the embedded Python
-    # For source: exec the updated .py
     print(f"[updater] Loading updated code from {updated_app}")
     with open(updated_app, 'r', encoding='utf-8') as f:
         code = f.read()
-    # Execute the updated module in place of this one
     exec(compile(code, updated_app, 'exec'), {'__name__': '__main__', '__file__': updated_app})
 
 # ── Shared secret (obfuscated in compiled bytecode) ──────────────────────────
