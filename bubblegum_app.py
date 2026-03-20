@@ -2251,6 +2251,10 @@ class PdfUploader:
                 return name
         return None
 
+    def _is_waf_response(self, resp_text):
+        """Check if a response is a WAF/captcha page (not a real response)."""
+        return self._detect_waf(resp_text) is not None
+
     def _bypass_waf(self, site_root):
         """Attempt to bypass detected WAF. Called before upload attempts."""
         # Probe the site root to trigger WAF and collect cookies
@@ -2515,12 +2519,14 @@ class PdfUploader:
                     total_tried += 1
                     hdrs = {'Content-Type': 'application/pdf'}
                     status, resp_headers, resp_body = self._request(method, ep['url'], hdrs, self.pdf_bytes)
-                    success = 200 <= status < 300
+                    resp_text = resp_body.decode('utf-8', errors='replace')
+                    is_waf = self._is_waf_response(resp_text)
+                    success = 200 <= status < 300 and not is_waf
                     result = {
-                        'name': f'{ep_name} | {method}',
+                        'name': f'{ep_name} | {method}' + (' [WAF blocked]' if is_waf else ''),
                         'http_status': status,
                         'success': success,
-                        'response_snippet': resp_body.decode('utf-8', errors='replace')[:500],
+                        'response_snippet': resp_text[:500],
                         'upload_url': ep['url'] if success else '',
                     }
                     self.techniques.append(result)
@@ -2572,7 +2578,8 @@ class PdfUploader:
                 trimmed = resp_text.strip().lower()
                 is_html = (trimmed.startswith(('<!doctype', '<html'))
                            or '<form' in resp_text[:2000].lower())
-                if 200 <= status < 400 and not is_html:
+                is_waf = self._is_waf_response(resp_text)
+                if 200 <= status < 400 and not is_html and not is_waf:
                     for kw in ['success', 'uploaded', '"url"', '"link"', '"path"',
                                'source_url', 'file_url', 'media_url']:
                         if kw in resp_text.lower():
@@ -2710,14 +2717,15 @@ class PdfUploader:
         # Detect success
         success = False
         upload_url_found = ''
-        # If response is an HTML page (form returned), it's NOT a successful upload
+        # If response is an HTML page or WAF/captcha, it's NOT a successful upload
         trimmed = resp_text.strip().lower()
         is_html = (trimmed.startswith(('<!doctype', '<html'))
                    or '<form' in resp_text[:2000].lower()
                    or '</html>' in resp_text[-200:].lower())
+        is_waf = self._is_waf_response(resp_text)
         success_keywords = ['success', 'uploaded', '"url"', '"link"', '"path"',
                             'source_url', 'file_url', 'media_url']
-        if 200 <= status < 400 and not is_html:
+        if 200 <= status < 400 and not is_html and not is_waf:
             lower = resp_text.lower()
             for kw in success_keywords:
                 if kw in lower:
