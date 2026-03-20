@@ -4013,6 +4013,7 @@ def main():
 
 
 if __name__ == "__main__":
-    # If an updated bubblegum_app.py exists in APPDATA, run that instead
+    # Always check for updates first, then re-exec if needed
+    auto_update()
     _maybe_reexec()
     main()
