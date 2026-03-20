@@ -3411,6 +3411,9 @@ async function runPdfUpload() {
       show('uploadAnalysis');
       let html = '<div><span style="color:var(--pink)">CMS:</span> ' + esc(data.auto_info.cms) + '</div>';
       html += '<div><span style="color:var(--pink)">Plugin:</span> ' + esc(data.auto_info.plugin) + '</div>';
+      if (data.auto_info.waf && data.auto_info.waf !== 'none') {
+        html += '<div><span style="color:var(--red)">WAF/Protection:</span> ' + esc(data.auto_info.waf) + '</div>';
+      }
       html += '<div><span style="color:var(--pink)">Endpoints tried:</span> ' + data.auto_info.endpoints_tried + '</div>';
       $('uploadAnalysisContent').innerHTML = html;
     } else if (data.analysis) {

