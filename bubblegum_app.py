@@ -3842,6 +3842,7 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
     def _handle_proxy(self, query):
         """Fetch a URL server-side and return raw HTML (CORS bypass).
+        Detects WAF/captcha and retries with headless browser.
         Forwards real HTTP status via X-Proxy-Status and final URL via X-Proxy-Url."""
         params = urllib.parse.parse_qs(query)
         url = params.get('url', [''])[0]
@@ -3862,14 +3863,28 @@ class QuietHandler(SimpleHTTPRequestHandler):
                 resp = urllib.request.urlopen(req, timeout=15, context=ctx)
                 real_status = resp.getcode()
                 final_url = resp.geturl()
-                data = resp.read(5 * 1024 * 1024)  # 5MB limit
+                data = resp.read(5 * 1024 * 1024)
                 resp.close()
             except urllib.error.HTTPError as he:
-                # Still return body for 404/410/etc so JS can inspect content
                 real_status = he.code
                 final_url = url
                 data = he.read(5 * 1024 * 1024)
                 he.close()
+
+            # Detect WAF/captcha in response — if found, retry with headless browser
+            html_text = data.decode('utf-8', errors='replace')
+            waf_patterns = ['sgcaptcha', 'cf-browser-verification', '__cf_chl_managed',
+                            'challenges.cloudflare.com', 'sucuri.net', 'imunify360']
+            is_waf = any(p in html_text.lower() for p in waf_patterns)
+
+            if is_waf or (len(data) < 1024 and real_status in (202, 403, 503)):
+                # Retry with headless browser
+                browser_data = self._proxy_via_browser(url)
+                if browser_data and len(browser_data) > len(data):
+                    data = browser_data
+                    real_status = 200
+                    final_url = url
+
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -3877,7 +3892,7 @@ class QuietHandler(SimpleHTTPRequestHandler):
             self.send_header('X-Proxy-Url', final_url)
             self.send_header('Access-Control-Expose-Headers', 'X-Proxy-Status, X-Proxy-Url')
             self.end_headers()
-            self.wfile.write(data)
+            self.wfile.write(data if isinstance(data, bytes) else data.encode())
         except Exception as e:
             self.send_response(502)
             self.send_header('Content-Type', 'text/plain')
@@ -3887,6 +3902,48 @@ class QuietHandler(SimpleHTTPRequestHandler):
             self.send_header('Access-Control-Expose-Headers', 'X-Proxy-Status, X-Proxy-Url')
             self.end_headers()
             self.wfile.write(str(e).encode())
+
+    def _proxy_via_browser(self, url):
+        """Fetch a URL using headless browser (bypasses WAF). Returns HTML bytes or None."""
+        try:
+            from selenium.webdriver import Edge, EdgeOptions
+
+            opts = EdgeOptions()
+            opts.add_argument('--headless=new')
+            opts.add_argument('--disable-gpu')
+            opts.add_argument('--no-sandbox')
+            opts.add_argument('--disable-blink-features=AutomationControlled')
+            opts.add_experimental_option('excludeSwitches', ['enable-automation'])
+            opts.add_experimental_option('useAutomationExtension', False)
+
+            driver = Edge(options=opts)
+            driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+                'source': ('Object.defineProperty(navigator, "webdriver", {get: () => undefined});'
+                           'window.chrome = {runtime: {}};')
+            })
+            driver.set_page_load_timeout(30)
+
+            try:
+                driver.get(url)
+                # Wait for JS-rendered forms to load
+                time.sleep(6)
+                # Try to wait for form elements specifically
+                try:
+                    from selenium.webdriver.common.by import By
+                    from selenium.webdriver.support.ui import WebDriverWait
+                    from selenium.webdriver.support import expected_conditions as EC
+                    WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, 'form, input, .nf-form-cont'))
+                    )
+                    time.sleep(1)
+                except Exception:
+                    pass
+                html = driver.page_source
+                return html.encode('utf-8')
+            finally:
+                driver.quit()
+        except Exception:
+            return None
 
 
 def kill_port(port):

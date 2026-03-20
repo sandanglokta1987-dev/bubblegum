@@ -202,7 +202,6 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
 /* tier badge */
 .tier-badge{font-family:var(--mono);font-size:12px;padding:4px 12px;border-radius:14px;}
 .tier-badge.basic{color:var(--green);background:var(--green-bg);border:1px solid rgba(34,197,94,.25);}
-.tier-badge.firecrawl{color:var(--blue);background:var(--blue-bg);border:1px solid rgba(96,165,250,.25);}
 .tier-badge.ai{color:var(--pink2);background:var(--pink-bg);border:1px solid var(--pink-border);}
 
 /* multi-step badge */
@@ -253,7 +252,7 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
       <span class="logo-name">BubbleGum</span>
       <span class="logo-tag">v5.0</span>
     </div>
-    <p class="tagline">// spam page scanner + form extractor + vuln scanner · find exploits · map form fields · test upload vectors</p>
+    <p class="tagline">// upload PDF · extract forms · get backlinks</p>
   </div>
 
   <!-- STATUS BAR -->
@@ -269,12 +268,6 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
       <span class="slabel">openai</span>
       <span class="stext" id="oaiText">no key</span>
     </div>
-    <span class="status-sep">|</span>
-    <div class="status-item" id="fcStatus">
-      <span class="sdot" id="fcDot"></span>
-      <span class="slabel">firecrawl</span>
-      <span class="stext" id="fcText">no key</span>
-    </div>
     <span class="status-ts" id="statusTs">&mdash;</span>
   </div>
 
@@ -288,10 +281,6 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
   <div class="card">
     <div class="sl">Configuration</div>
     <div class="row" id="keyRow1">
-      <div class="field" id="fcKeyField">
-        <label>Firecrawl API Key <span id="fcKeyLabel" class="opt">optional · form extractor only</span></label>
-        <input type="password" id="fcKey" placeholder="fc-xxxxxxxxxxxxxxxx"/>
-      </div>
       <div class="field" id="aiKeyField">
         <label>Anthropic API Key <span id="aiKeyLabel" class="opt">optional &middot; improves accuracy</span></label>
         <input type="password" id="aiKey" placeholder="sk-ant-xxxxxxxx"/>
@@ -348,7 +337,6 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
     <div id="extractorConfig" class="hidden">
       <div class="tier-switcher" id="tierSwitcher">
         <button class="tier-btn active" data-tier="basic">Basic</button>
-        <button class="tier-btn" data-tier="firecrawl">Firecrawl</button>
         <button class="tier-btn" data-tier="ai">AI</button>
       </div>
       <div class="tier-hint" id="tierHint">DOM-only extraction &mdash; no API keys needed, won't work for JS-rendered forms</div>
@@ -827,7 +815,7 @@ let feCreditsUsed = 0;
 let currentMode = 'upload'; // 'upload' | 'extractor'
 let uploadMode = 'auto'; // 'auto' | 'form_page' | 'direct'
 let uploadPdfFile = null;     // File object from picker
-let currentTier = 'basic';   // 'basic' | 'firecrawl' | 'ai'
+let currentTier = 'basic';   // 'basic' | 'ai'
 let cachedCrawlPages = [];   // keyword-hit pages cached for AI re-analysis
 let cachedPlugin = null;     // plugin name from initial scan (or null)
 
@@ -942,13 +930,11 @@ async function proxyCrawl(siteRoot, maxPages = 100) {
 async function checkStatus() {
   const aiKey = $('aiKey').value.trim();
   const oaiKey = $('oaiKey').value.trim();
-  const fcKey = $('fcKey').value.trim();
   const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
 
   // Save keys + model to localStorage
   localStorage.setItem('bg_aiKey', aiKey);
   localStorage.setItem('bg_oaiKey', oaiKey);
-  localStorage.setItem('bg_fcKey', fcKey);
   localStorage.setItem('bg_model', $('modelSelect').value);
 
   // ── Anthropic check ──
@@ -1047,54 +1033,6 @@ async function checkStatus() {
     }
   }
 
-  // ── Firecrawl check ──
-  const fcDot = $('fcDot');
-  const fcText = $('fcText');
-
-  if (!fcKey) {
-    fcDot.className = 'sdot';
-    fcText.className = 'stext';
-    fcText.textContent = 'no key';
-  } else {
-    fcDot.className = 'sdot chk';
-    fcText.className = 'stext';
-    fcText.textContent = 'checking...';
-    try {
-      const res = await fetch('https://api.firecrawl.dev/v1/team/credit-usage', {
-        headers: { 'Authorization': 'Bearer ' + fcKey }
-      });
-
-      if (res.ok) {
-        let credits = null;
-        try {
-          const data = await res.json();
-          credits = data.remaining_credits ?? data.credits_remaining ?? null;
-        } catch {}
-        fcDot.className = 'sdot on';
-        fcText.className = 'stext on';
-        fcText.textContent = credits !== null
-          ? `online \u2713 (${credits} credits left)`
-          : 'online \u2713';
-      } else if (res.status === 401 || res.status === 403) {
-        fcDot.className = 'sdot err';
-        fcText.className = 'stext err';
-        fcText.textContent = 'invalid key';
-      } else if (res.status === 402) {
-        fcDot.className = 'sdot err';
-        fcText.className = 'stext err';
-        fcText.textContent = 'credits exhausted';
-      } else {
-        fcDot.className = 'sdot err';
-        fcText.className = 'stext err';
-        fcText.textContent = 'error ' + res.status;
-      }
-    } catch (e) {
-      fcDot.className = 'sdot err';
-      fcText.className = 'stext err';
-      fcText.textContent = 'connection failed';
-    }
-  }
-
   $('statusTs').textContent = 'checked ' + ts;
 }
 
@@ -1189,68 +1127,6 @@ async function callAI(systemOrNull, userMessage, maxTokens) {
     if (!key) throw new Error('Anthropic API key required for this model');
     return callClaude(key, model, systemOrNull, userMessage, maxTokens);
   }
-}
-
-// ─── API: FIRECRAWL ─────────────────────────────────────────────
-
-async function startCrawl(fcKey, siteUrl, limit = 500) {
-  const res = await fetch('https://api.firecrawl.dev/v1/crawl', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + fcKey
-    },
-    body: JSON.stringify({
-      url: siteUrl,
-      limit,
-      scrapeOptions: { formats: ['markdown', 'rawHtml'], onlyMainContent: false }
-    })
-  });
-
-  if (!res.ok) throw new Error('Firecrawl start failed: HTTP ' + res.status);
-  const data = await res.json();
-  if (!data.success && !data.id) throw new Error(data.error || 'No crawl ID returned');
-  return data.id;
-}
-
-async function pollCrawl(fcKey, crawlId) {
-  const pages = [];
-  const seen = new Set();
-  let url = `https://api.firecrawl.dev/v1/crawl/${crawlId}`;
-
-  for (let attempt = 0; attempt < 120; attempt++) {
-    if (scanState === 'stopped') return pages;
-    while (scanState === 'paused') await sleep(400);
-
-    const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + fcKey } });
-    if (!res.ok) throw new Error('Poll failed: HTTP ' + res.status);
-    const data = await res.json();
-
-    if (data.data) {
-      for (const p of data.data) {
-        const pageUrl = p.metadata?.sourceURL || p.metadata?.url || '';
-        if (pageUrl && !seen.has(pageUrl)) {
-          seen.add(pageUrl);
-          pages.push({ url: pageUrl, markdown: p.markdown || '', html: p.rawHtml || '' });
-        }
-      }
-    }
-
-    const completed = data.completed || pages.length;
-    const total = data.total || completed || 1;
-    setProgress(completed, total, `crawling \u00b7 ${completed}/${total} pages \u00b7 ${data.status}`);
-
-    if (data.status === 'completed') {
-      if (data.next) { url = data.next; continue; }
-      return pages;
-    }
-    if (data.status === 'failed') throw new Error('Crawl failed on server');
-
-    await sleep(4000);
-  }
-
-  log('crawl timed out after 8 minutes', 'warn');
-  return pages;
 }
 
 // ─── KEYWORD DETECTION ─────────────────────────────────────────
@@ -1606,7 +1482,7 @@ async function runScan() {
 
     if (scanState === 'stopped') throw 'STOPPED';
 
-    // ── Step 2: REST API page discovery (FREE — no Firecrawl credits) ──
+    // ── Step 2: REST API page discovery ──
     const apiFormPages = [];
     if (urlClues.cms === 'wordpress' || plugin) {
       log('enumerating all pages via WordPress REST API...', 'info');
@@ -2147,8 +2023,6 @@ function switchMode(mode) {
     hide('feResultSection');
     hide('vsResultSection');
     hide('uploadResultSection');
-    $('fcKeyLabel').className = 'opt';
-    $('fcKeyLabel').textContent = 'optional \u00b7 form extractor only';
     $('aiKeyLabel').className = 'opt';
     $('aiKeyLabel').textContent = 'optional \u00b7 improves accuracy';
     $('oaiKeyLabel').className = 'opt';
@@ -2180,8 +2054,7 @@ function switchTier(tier) {
   }
   const hints = {
     basic: 'DOM-only extraction \u2014 no API keys needed, won\'t work for JS-rendered forms',
-    firecrawl: 'Scrapes JS-rendered pages, then DOM extraction \u2014 Firecrawl key only',
-    ai: 'Full AI analysis \u2014 best for complex forms \u2014 needs Firecrawl + AI keys'
+    ai: 'Full AI analysis \u2014 best for complex forms \u2014 needs AI keys'
   };
   $('tierHint').textContent = hints[tier];
   updateConfigVisibility();
@@ -2191,7 +2064,6 @@ function updateConfigVisibility() {
   if (currentMode === 'upload') {
     $('keyRow1').classList.remove('hidden');
     $('keyRow2').classList.remove('hidden');
-    $('fcKeyField').classList.add('hidden');
     $('aiKeyField').classList.remove('hidden');
     $('aiKeyLabel').className = 'opt';
     $('aiKeyLabel').textContent = 'recommended \u00b7 AI page analysis';
@@ -2202,7 +2074,6 @@ function updateConfigVisibility() {
   if (currentMode === 'vuln') {
     $('keyRow1').classList.remove('hidden');
     $('keyRow2').classList.remove('hidden');
-    $('fcKeyField').classList.add('hidden');
     $('aiKeyField').classList.remove('hidden');
     $('aiKeyLabel').className = 'opt';
     $('aiKeyLabel').textContent = 'optional \u00b7 AI-enhanced probing';
@@ -2213,7 +2084,6 @@ function updateConfigVisibility() {
   if (currentMode === 'scanner') {
     $('keyRow1').classList.remove('hidden');
     $('keyRow2').classList.remove('hidden');
-    $('fcKeyField').classList.remove('hidden');
     $('aiKeyField').classList.remove('hidden');
     return;
   }
@@ -2221,18 +2091,8 @@ function updateConfigVisibility() {
   if (currentTier === 'basic') {
     $('keyRow1').classList.add('hidden');
     $('keyRow2').classList.add('hidden');
-  } else if (currentTier === 'firecrawl') {
-    $('keyRow1').classList.remove('hidden');
-    $('fcKeyField').classList.remove('hidden');
-    $('fcKeyLabel').className = 'req';
-    $('fcKeyLabel').textContent = 'required';
-    $('aiKeyField').classList.add('hidden');
-    $('keyRow2').classList.add('hidden');
   } else { // ai
     $('keyRow1').classList.remove('hidden');
-    $('fcKeyField').classList.remove('hidden');
-    $('fcKeyLabel').className = 'req';
-    $('fcKeyLabel').textContent = 'required';
     $('aiKeyField').classList.remove('hidden');
     $('keyRow2').classList.remove('hidden');
     updateKeyLabels();
@@ -2254,87 +2114,6 @@ function updateKeyLabels() {
     $('oaiKeyLabel').className = 'opt';
     $('oaiKeyLabel').textContent = 'optional';
   }
-}
-
-// ─── FORM EXTRACTOR: SCRAPE ────────────────────────────────────
-
-async function feScrapePages(fcKey, urls) {
-  const results = [];
-  const concurrency = 2;
-  let i = 0;
-
-  async function scrapeOne(url) {
-    for (let retry = 0; retry < 3; retry++) {
-      if (feState === 'stopped') return null;
-      while (feState === 'paused') await sleep(400);
-
-      try {
-        const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + fcKey
-          },
-          body: JSON.stringify({
-            url,
-            formats: ['rawHtml'],
-            onlyMainContent: false,
-            waitFor: 5000,
-            actions: [
-              { type: 'wait', milliseconds: 3000 },
-              { type: 'wait', selector: 'form, input, textarea, select, [class*="form"], [class*="wpem"], [data-form]' }
-            ],
-            timeout: 45000
-          })
-        });
-
-        if (res.status === 429) {
-          const wait = Math.pow(2, retry) * 1000;
-          log(`rate limited, retrying in ${wait / 1000}s...`, 'warn');
-          await sleep(wait);
-          continue;
-        }
-
-        if (res.status >= 500) {
-          log(`server error scraping ${url}, skipping`, 'warn');
-          return null;
-        }
-
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-
-        const data = await res.json();
-        feCreditsUsed++;
-        $('feCreditBadge').textContent = feCreditsUsed + ' credits used';
-        return { url, html: data.data?.rawHtml || data.data?.html || '' };
-      } catch (e) {
-        if (retry === 2) {
-          log(`failed to scrape ${url}: ${e.message}`, 'warn');
-          return null;
-        }
-      }
-    }
-    return null;
-  }
-
-  while (i < urls.length) {
-    if (feState === 'stopped') break;
-    while (feState === 'paused') await sleep(400);
-
-    const batch = [];
-    for (let j = 0; j < concurrency && i < urls.length; j++, i++) {
-      batch.push(scrapeOne(urls[i]));
-      if (j < concurrency - 1) await sleep(300);
-    }
-
-    const batchResults = await Promise.all(batch);
-    for (const r of batchResults) {
-      if (r) results.push(r);
-    }
-
-    setProgress(i, urls.length, `scraping ${i}/${urls.length} pages`);
-  }
-
-  return results;
 }
 
 // ─── FORM EXTRACTOR: RECON + STRATEGIES ─────────────────────────
@@ -2393,14 +2172,7 @@ function feExtractRawHTML(html) {
   return s;
 }
 
-async function feScrapeIframes(fcKey, iframeSrcs, originUrl) {
-  const resolved = iframeSrcs.map(src =>
-    src.startsWith('http') ? src : new URL(src, originUrl).href
-  );
-  return feScrapePages(fcKey, resolved);
-}
-
-// ─── FORM EXTRACTOR: DOM EXTRACTION (BASIC + FIRECRAWL TIERS) ──
+// ─── FORM EXTRACTOR: DOM EXTRACTION (BASIC TIER) ──
 
 function feExtractDOM(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -2660,8 +2432,8 @@ function feRenderResults(results) {
     return;
   }
 
-  const tierLabels = { basic: 'Basic', firecrawl: 'Firecrawl', ai: 'AI' };
-  const tierColors = { basic: 'b-green', firecrawl: 'b-info', ai: 'b-pink' };
+  const tierLabels = { basic: 'Basic', ai: 'AI' };
+  const tierColors = { basic: 'b-green', ai: 'b-pink' };
 
   for (const page of results) {
     if (!page.forms || !page.forms.length) continue;
@@ -2803,9 +2575,6 @@ async function runFormExtraction() {
   const tier = currentTier;
 
   // Validate keys based on tier
-  if (tier === 'firecrawl' || tier === 'ai') {
-    if (!$('fcKey').value.trim()) { alert('Firecrawl API key is required for this tier.'); return; }
-  }
   if (tier === 'ai') {
     const model = $('modelSelect').value;
     if (isOpenAIModel(model)) {
@@ -2877,73 +2646,25 @@ async function runFormExtraction() {
         feResults.push({ url: siteUrl, forms: result.forms, tier: 'basic' });
       }
 
-    } else if (tier === 'firecrawl') {
-      // ── FIRECRAWL: scrape → DOM extract ──
-      const fcKey = $('fcKey').value.trim();
-      log('scraping via Firecrawl...', 'info');
-      show('pWrap');
-
-      const scraped = await feScrapePages(fcKey, [siteUrl]);
-      feCreditsUsed = scraped.length;
-      $('feCreditBadge').textContent = feCreditsUsed + ' credits used';
-      log(`scraped (${feCreditsUsed} credit${feCreditsUsed !== 1 ? 's' : ''})`, 'ok');
-
-      if (!scraped.length) {
-        log('failed to scrape page', 'warn');
-        throw 'NO_URLS';
-      }
-
-      if (feState === 'stopped') throw 'STOPPED';
-
-      const page = scraped[0];
-      if (!page.html || page.html.trim().length < 50) {
-        log('page HTML too short or empty', 'warn');
-        feResults.push({ url: page.url, forms: [], tier: 'firecrawl' });
-      } else {
-        const recon = feReconPage(page.html);
-        log(`recon: ${recon.formCount} forms, ${recon.inputCount} inputs, plugins: ${recon.plugins.join(', ') || 'none'}`, 'info');
-
-        const result = feExtractDOM(page.html);
-        let fieldCount = 0;
-        for (const f of result.forms) fieldCount += (f.fields || []).length;
-        log(`DOM extracted: ${result.forms.length} form(s), ${fieldCount} fields`, 'ok');
-
-        feResults.push({ url: page.url, forms: result.forms, tier: 'firecrawl' });
-
-        // Also check iframes
-        if (recon.iframeSrcs.length > 0) {
-          log(`following ${recon.iframeSrcs.length} iframe(s)...`, 'info');
-          const iframePages = await feScrapeIframes(fcKey, recon.iframeSrcs, siteUrl);
-          for (const ip of iframePages) {
-            if (ip.html && ip.html.length > 50) {
-              const iResult = feExtractDOM(ip.html);
-              if (iResult.forms.length > 0) {
-                feResults.push({ url: ip.url, forms: iResult.forms, tier: 'firecrawl' });
-              }
-            }
-          }
-        }
-      }
-
     } else {
-      // ── AI TIER: Firecrawl scrape → AI analysis with DOM fallback ──
-      const fcKey = $('fcKey').value.trim();
-      log('scraping via Firecrawl...', 'info');
+      // ── AI TIER: proxy fetch → AI analysis with DOM fallback ──
+      log('fetching via proxy (AI mode)...', 'info');
       show('pWrap');
+      setProgress(0, 1, 'fetching page...');
 
-      const scraped = await feScrapePages(fcKey, [siteUrl]);
-      feCreditsUsed = scraped.length;
-      $('feCreditBadge').textContent = feCreditsUsed + ' credits used';
-      log(`scraped (${feCreditsUsed} credit${feCreditsUsed !== 1 ? 's' : ''})`, 'ok');
-
-      if (!scraped.length) {
-        log('failed to scrape page', 'warn');
-        throw 'NO_URLS';
+      const proxyUrl = '/proxy?url=' + encodeURIComponent(siteUrl);
+      const resp = await fetch(proxyUrl);
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error('Proxy fetch failed: ' + errText.substring(0, 200));
       }
+      const html = await resp.text();
+      setProgress(1, 1, 'analysing...');
+      log(`fetched ${(html.length / 1024).toFixed(1)}KB HTML`, 'ok');
 
       if (feState === 'stopped') throw 'STOPPED';
 
-      const page = scraped[0];
+      const page = { url: siteUrl, html };
       if (!page.html || page.html.trim().length < 50) {
         log('page HTML too short or empty', 'warn');
         feResults.push({ url: page.url, forms: [], tier: 'ai' });
@@ -2958,15 +2679,6 @@ async function runFormExtraction() {
 
         strategies.standard = feAiExtract(page.url, page.html, 'standard');
         strategies.raw = feAiExtract(page.url, page.html, 'raw');
-
-        if (recon.iframeSrcs.length > 0) {
-          log(`following ${recon.iframeSrcs.length} iframe(s)...`, 'info');
-          strategies.iframe = (async () => {
-            const iframePages = await feScrapeIframes(fcKey, recon.iframeSrcs, siteUrl);
-            if (!iframePages.length) return null;
-            return feAiExtract(iframePages[0].url, iframePages[0].html, 'standard');
-          })();
-        }
 
         // DOM fallback strategy (runs instantly, catches AI failures)
         strategies.dom = Promise.resolve(feExtractDOM(page.html));
@@ -3004,13 +2716,6 @@ async function runFormExtraction() {
           feResults.push({ url: page.url, forms: [], tier: 'ai' });
         }
 
-        // Add iframe pages as separate entries if iframe strategy had forms and wasn't the winner
-        if (strategies.iframe && bestLabel !== 'iframe') {
-          const iframeResult = results[labels.indexOf('iframe')];
-          if (iframeResult?.status === 'fulfilled' && iframeResult.value?.forms?.length) {
-            feResults.push({ url: recon.iframeSrcs[0], forms: iframeResult.value.forms, tier: 'ai' });
-          }
-        }
       }
     }
 
@@ -3510,12 +3215,10 @@ function stopScan() {
   // Load saved keys + model + tier
   const savedAI = localStorage.getItem('bg_aiKey');
   const savedOAI = localStorage.getItem('bg_oaiKey');
-  const savedFC = localStorage.getItem('bg_fcKey');
   const savedModel = localStorage.getItem('bg_model');
   const savedTier = localStorage.getItem('bg_tier');
   if (savedAI) $('aiKey').value = savedAI;
   if (savedOAI) $('oaiKey').value = savedOAI;
-  if (savedFC) $('fcKey').value = savedFC;
   if (savedModel) $('modelSelect').value = savedModel;
   if (savedTier) switchTier(savedTier);
 
@@ -3612,7 +3315,6 @@ function stopScan() {
   // Status bar: check on key change (debounced)
   $('aiKey').addEventListener('input', scheduleStatusCheck);
   $('oaiKey').addEventListener('input', scheduleStatusCheck);
-  $('fcKey').addEventListener('input', scheduleStatusCheck);
   $('modelSelect').addEventListener('change', () => { updateKeyLabels(); scheduleStatusCheck(); });
 
   // Status bar: auto-check every 30 seconds
