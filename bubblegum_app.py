@@ -2754,6 +2754,25 @@ class PdfUploader:
                 if last_slash > 0:
                     upload_subpath = path[:last_slash + 1]
 
+        # If CMS not detected from URL, probe the site
+        if not cms:
+            try:
+                status, _, body = self._request('GET', site_root)
+                html = body.decode('utf-8', errors='replace')[:10000].lower()
+                if '/wp-content/' in html or '/wp-includes/' in html or 'wordpress' in html:
+                    cms = 'wordpress'
+                elif 'drupal' in html or '/sites/default/' in html:
+                    cms = 'drupal'
+                elif 'joomla' in html:
+                    cms = 'joomla'
+            except Exception:
+                pass
+
+        if not upload_subpath:
+            last_slash = path.rfind('/')
+            if last_slash > 0:
+                upload_subpath = path[:last_slash + 1]
+
         return {
             'site_root': site_root,
             'cms': cms or 'unknown',
@@ -2962,9 +2981,17 @@ class PdfUploader:
 
         self._auto_info['endpoints_tried'] = total_tried
 
-        # If WAF blocked everything, retry using the headless browser
+        # If nothing worked, retry using headless browser (form crawl + WAF bypass)
         if not any(t['success'] for t in self.techniques):
-            self._browser_upload_pass(endpoints, bypass_variants)
+            try:
+                self._browser_upload_pass(endpoints, bypass_variants)
+            except Exception as e:
+                self.techniques.append({
+                    'name': 'Browser Upload Pass',
+                    'http_status': 0, 'success': False,
+                    'response_snippet': f'Browser error: {e}',
+                    'upload_url': '',
+                })
             self._close_browser()
 
     def _browser_upload_pass(self, endpoints, bypass_variants):
