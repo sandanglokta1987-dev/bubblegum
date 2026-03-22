@@ -159,6 +159,16 @@ def _update_files():
     """Download latest bubblegum_app.py + bubblegum.html from GitHub."""
     try:
         sha_file = APP_DIR / ".update_sha"
+
+        # Migrate from old versions: if .update_sha doesn't exist but old files do,
+        # wipe cached files to force fresh download (old V3 cache → new V4)
+        if not sha_file.exists():
+            for old in [APP_DIR / ".version", APP_DIR / ".html_sha",
+                        APP_DIR / "bubblegum.html", APP_DIR / "bubblegum_app.py"]:
+                if old.exists():
+                    old.unlink()
+                    print(f"[updater] Removed old cache: {old.name}", flush=True)
+
         local_sha = sha_file.read_text().strip() if sha_file.exists() else ""
 
         api_url = f"https://api.github.com/repos/{GITHUB_REPO}/commits/{GITHUB_BRANCH}"
