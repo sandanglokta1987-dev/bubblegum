@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BubbleGum — Scanner + Form Extractor</title>
+<title>BubbleGum — Form Extractor + Filler</title>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -34,29 +34,18 @@
 }
 html{scroll-behavior:smooth;}
 body{background:var(--bg);color:var(--text);font-family:var(--display);font-size:16px;line-height:1.6;min-height:100vh;overflow-x:hidden;}
-
 body::before{content:'';position:fixed;top:-200px;right:-200px;width:600px;height:600px;background:radial-gradient(circle,rgba(255,105,180,0.08) 0%,transparent 70%);pointer-events:none;z-index:0;}
 body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:500px;height:500px;background:radial-gradient(circle,rgba(96,165,250,0.05) 0%,transparent 70%);pointer-events:none;z-index:0;}
-
 .wrap{max-width:900px;margin:0 auto;padding:48px 24px 100px;position:relative;z-index:1;}
 
-/* header */
 .header{margin-bottom:12px;}
 .logo{display:flex;align-items:center;gap:14px;margin-bottom:8px;}
 .logo-bubble{width:52px;height:52px;background:var(--pink);border-radius:50% 50% 50% 20%;display:flex;align-items:center;justify-content:center;font-size:26px;animation:float 3s ease-in-out infinite;box-shadow:0 4px 15px rgba(255,105,180,0.4);}
 @keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
 .logo-name{font-size:36px;font-weight:700;letter-spacing:-0.5px;background:linear-gradient(135deg,#fff 30%,var(--pink2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-.logo-tag{font-family:var(--mono);font-size:12px;color:var(--pink);letter-spacing:.15em;text-transform:uppercase;background:var(--pink-bg);border:1px solid var(--pink-border);padding:3px 10px;border-radius:6px;}
 .tagline{color:var(--muted);font-size:14px;font-family:var(--mono);margin-top:4px;}
 
-/* status bar */
-.status-bar{
-  display:flex;align-items:center;gap:20px;
-  padding:12px 18px;margin:16px 0 24px;
-  background:var(--surface);border:1px solid var(--border);border-radius:14px;
-  font-family:var(--mono);font-size:13px;
-  flex-wrap:wrap;
-}
+.status-bar{display:flex;align-items:center;gap:20px;padding:12px 18px;margin:16px 0 24px;background:var(--surface);border:1px solid var(--border);border-radius:14px;font-family:var(--mono);font-size:13px;flex-wrap:wrap;}
 .status-item{display:flex;align-items:center;gap:8px;}
 .sdot{width:9px;height:9px;border-radius:50%;background:var(--hint);flex-shrink:0;transition:background .3s;}
 .sdot.on{background:var(--green);box-shadow:0 0 8px rgba(34,197,94,0.5);}
@@ -67,17 +56,13 @@ body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:500px;heig
 .stext{color:var(--hint);transition:color .3s;}
 .stext.on{color:var(--green);}
 .stext.err{color:var(--red);}
-.stext.warn{color:var(--amber);}
 .status-ts{margin-left:auto;color:var(--hint);}
-.status-sep{color:var(--border2);user-select:none;}
 
-/* cards */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 32px;margin-bottom:18px;position:relative;overflow:hidden;}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,105,180,0.4),transparent);}
 .sl{font-family:var(--mono);font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:.12em;color:var(--hint);margin-bottom:16px;display:flex;align-items:center;gap:8px;}
 .sl::before{content:'';display:inline-block;width:4px;height:4px;background:var(--pink);border-radius:50%;}
 
-/* fields */
 .field{margin-bottom:18px;}
 .field label{display:block;font-family:var(--mono);font-size:14px;color:var(--muted);margin-bottom:8px;letter-spacing:.04em;}
 .field label .req{color:var(--pink);margin-left:4px;}
@@ -89,23 +74,19 @@ input[type=text],input[type=password],select{
   transition:border-color .2s,background .2s;
 }
 select{cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7'%3E%3Cpath d='M0 0l6 7 6-7z' fill='%23a070a0'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;}
-select option,select optgroup{background:var(--surface2);color:var(--text);}
-select optgroup{font-weight:600;color:var(--muted);}
+select option{background:var(--surface2);color:var(--text);}
 input::placeholder{color:var(--hint);}
 input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
 .row{display:flex;gap:14px;}
 .row .field{flex:1;}
 
-/* buttons */
 .btn-row{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap;}
 .btn{padding:14px 26px;border:none;border-radius:14px;font-family:var(--display);font-size:16px;font-weight:600;cursor:pointer;transition:all .15s;letter-spacing:.02em;}
 .btn:disabled{opacity:.35;cursor:not-allowed;}
 .btn-primary{background:var(--pink);color:#fff;box-shadow:0 4px 0 #cc3388,0 0 20px rgba(255,105,180,0.3);}
 .btn-primary:hover:not(:disabled){background:var(--pink2);box-shadow:0 4px 0 #dd44aa,0 0 28px rgba(255,105,180,0.5);transform:translateY(-1px);}
 .btn-primary:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 #cc3388,0 0 12px rgba(255,105,180,0.3);}
-.btn-pause{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(245,158,11,.25);border-radius:14px;font-size:15px;padding:12px 20px;}
-.btn-pause:hover:not(:disabled){background:rgba(245,158,11,0.15);}
-.btn-stop{background:var(--red-bg);color:var(--red);border:1px solid rgba(239,68,68,.25);border-radius:14px;font-size:15px;padding:12px 20px;}
+.btn-stop{background:var(--red-bg);color:var(--red);border:1px solid rgba(239,68,68,.25);border-radius:14px;font-size:15px;padding:12px 20px;cursor:pointer;}
 .btn-stop:hover:not(:disabled){background:rgba(239,68,68,0.15);}
 .btn-outline{background:transparent;color:var(--pink);border:1px solid var(--pink-border);border-radius:14px;font-size:14px;padding:12px 20px;font-family:var(--display);font-weight:600;cursor:pointer;transition:all .15s;}
 .btn-outline:hover:not(:disabled){background:var(--pink-bg);color:var(--pink2);}
@@ -114,7 +95,6 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
 .live-badge.active{animation:pulse 2s infinite;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.6;}}
 
-/* log */
 .logbox{background:rgba(10,4,14,0.8);border:1px solid var(--border);border-radius:14px;padding:18px 20px;font-family:var(--mono);font-size:13px;line-height:2;min-height:90px;max-height:260px;overflow-y:auto;}
 .logbox::-webkit-scrollbar{width:5px;}
 .logbox::-webkit-scrollbar-track{background:transparent;}
@@ -126,53 +106,23 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
 .lwarn{color:var(--amber);}
 .lerr{color:var(--red);}
 
-/* progress */
 .pbar-wrap{height:4px;background:var(--surface3);border-radius:2px;margin:14px 0 6px;}
 .pbar-fill{height:4px;background:linear-gradient(90deg,var(--pink),var(--pink2));border-radius:2px;transition:width .4s;box-shadow:0 0 10px rgba(255,105,180,0.5);}
 .plabel{font-family:var(--mono);font-size:12px;color:var(--muted);}
 
-/* result cards */
-.result-list{display:flex;flex-direction:column;gap:10px;}
-.rc{background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:16px 20px;transition:border-color .2s;animation:slideIn .25s ease-out;}
-@keyframes slideIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
-.rc.exploit{border-left:3px solid var(--pink);background:linear-gradient(90deg,rgba(255,105,180,0.06),var(--surface2));}
-.rc.exploit:hover{border-color:var(--pink-border);}
-.rc.archived{border-left:3px solid var(--blue);}
-.rc-url{font-family:var(--mono);font-size:13px;word-break:break-all;margin-bottom:10px;}
-.rc-url a{color:var(--pink2);text-decoration:none;}
-.rc-url a:hover{text-decoration:underline;}
-.rc-badges{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px;}
-.badge{display:inline-block;font-family:var(--mono);font-size:12px;font-weight:500;padding:4px 11px;border-radius:7px;}
-.b-high{background:var(--red-bg);color:var(--red);border:1px solid rgba(239,68,68,.2);}
-.b-med{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(245,158,11,.2);}
-.b-low{background:rgba(255,255,255,.04);color:var(--muted);border:1px solid var(--border2);}
-.b-info{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(96,165,250,.2);}
-.b-pink{background:var(--pink-bg);color:var(--pink2);border:1px solid var(--pink-border);}
-.b-green{background:var(--green-bg);color:var(--green);border:1px solid rgba(34,197,94,.2);}
-.rc-desc{font-family:var(--mono);font-size:13px;color:var(--muted);line-height:1.5;}
-.empty{font-family:var(--mono);font-size:14px;color:var(--hint);padding:24px 0;text-align:center;}
+.tab-switcher{display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:4px;margin-bottom:18px;width:fit-content;}
+.tab-btn{padding:10px 24px;border:none;border-radius:12px;font-family:var(--display);font-size:14px;font-weight:600;cursor:pointer;background:transparent;color:var(--muted);transition:all .2s;letter-spacing:.02em;}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{background:var(--pink);color:#fff;box-shadow:0 3px 0 #cc3388,0 0 12px rgba(255,105,180,0.3);}
 
-.sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:16px;}
-.sec-title{font-size:15px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;}
-.sec-count{font-family:var(--mono);font-size:13px;color:var(--hint);}
-
-.hidden{display:none!important;}
-
-/* mode switcher */
-.mode-switcher{display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:4px;margin-bottom:18px;width:fit-content;}
-.mode-btn{padding:10px 24px;border:none;border-radius:12px;font-family:var(--display);font-size:14px;font-weight:600;cursor:pointer;background:transparent;color:var(--muted);transition:all .2s;letter-spacing:.02em;}
-.mode-btn:hover{color:var(--text);}
-.mode-btn.active{background:var(--pink);color:#fff;box-shadow:0 3px 0 #cc3388,0 0 12px rgba(255,105,180,0.3);}
-
-/* tier switcher */
 .tier-switcher{display:flex;gap:0;background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:3px;margin-bottom:14px;width:fit-content;}
 .tier-btn{padding:9px 20px;border:none;border-radius:11px;font-family:var(--display);font-size:13px;font-weight:500;cursor:pointer;background:transparent;color:var(--muted);transition:all .2s;letter-spacing:.02em;}
 .tier-btn:hover{color:var(--text);}
 .tier-btn.active{background:var(--surface3);color:var(--pink);border:1px solid var(--pink-border);}
 .tier-hint{font-family:var(--mono);font-size:12px;color:var(--hint);margin-bottom:16px;padding-left:2px;}
 
-/* form extractor accordion cards */
 .fe-card{background:var(--surface2);border:1px solid var(--border);border-radius:16px;margin-bottom:10px;overflow:hidden;animation:slideIn .25s ease-out;}
+@keyframes slideIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
 .fe-card-header{display:flex;align-items:center;gap:12px;padding:16px 20px;cursor:pointer;transition:background .15s;flex-wrap:wrap;}
 .fe-card-header:hover{background:var(--surface3);}
 .fe-card-url{font-family:var(--mono);font-size:13px;color:var(--pink2);word-break:break-all;flex:1;min-width:200px;}
@@ -182,7 +132,6 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
 .fe-card-body{display:none;border-top:1px solid var(--border);padding:16px 20px;overflow-x:auto;}
 .fe-card.open .fe-card-body{display:block;}
 
-/* field table */
 .fe-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:13px;}
 .fe-table th{text-align:left;color:var(--hint);font-weight:500;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;}
 .fe-table td{padding:8px 12px;color:var(--muted);border-bottom:1px solid var(--border);vertical-align:top;}
@@ -192,53 +141,34 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
 .fe-table .req-yes{color:var(--pink);}
 .fe-table .req-no{color:var(--hint);}
 
-/* export buttons */
+.badge{display:inline-block;font-family:var(--mono);font-size:12px;font-weight:500;padding:4px 11px;border-radius:7px;}
+.b-info{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(96,165,250,.2);}
+.b-low{background:rgba(255,255,255,.04);color:var(--muted);border:1px solid var(--border2);}
+.b-pink{background:var(--pink-bg);color:var(--pink2);border:1px solid var(--pink-border);}
+.b-green{background:var(--green-bg);color:var(--green);border:1px solid rgba(34,197,94,.2);}
+.b-multi{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(245,158,11,.2);}
+
 .btn-export{padding:9px 16px;border:none;border-radius:10px;font-family:var(--mono);font-size:13px;font-weight:500;cursor:pointer;background:var(--surface3);color:var(--muted);border:1px solid var(--border2);transition:all .15s;}
 .btn-export:hover{background:var(--surface2);color:var(--text);border-color:var(--pink-border);}
 
-/* credit badge */
-.credit-badge{font-family:var(--mono);font-size:12px;color:var(--amber);background:var(--amber-bg);border:1px solid rgba(245,158,11,.25);padding:4px 12px;border-radius:14px;}
-
-/* tier badge */
 .tier-badge{font-family:var(--mono);font-size:12px;padding:4px 12px;border-radius:14px;}
 .tier-badge.basic{color:var(--green);background:var(--green-bg);border:1px solid rgba(34,197,94,.25);}
-.tier-badge.firecrawl{color:var(--blue);background:var(--blue-bg);border:1px solid rgba(96,165,250,.25);}
 .tier-badge.ai{color:var(--pink2);background:var(--pink-bg);border:1px solid var(--pink-border);}
 
-/* multi-step badge */
-.b-multi{background:rgba(139,92,246,0.08);color:#a78bfa;border:1px solid rgba(139,92,246,.2);}
+.empty{font-family:var(--mono);font-size:14px;color:var(--hint);padding:24px 0;text-align:center;}
+.hidden{display:none!important;}
 
-.fe-header-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;}
-.fe-header-row .sec-title{flex-shrink:0;}
-
-/* vuln scanner */
-.vs-row{background:var(--surface2);border:1px solid var(--border);border-radius:16px;margin-bottom:10px;overflow:hidden;animation:slideIn .25s ease-out;}
-.vs-row-header{display:flex;align-items:center;gap:12px;padding:16px 20px;cursor:pointer;transition:background .15s;flex-wrap:wrap;}
-.vs-row-header:hover{background:var(--surface3);}
-.vs-row.vuln{border-left:3px solid var(--red);}
-.vs-row.safe{border-left:3px solid var(--green);}
-.vs-row.error{border-left:3px solid var(--amber);}
-.vs-row-url{font-family:var(--mono);font-size:13px;color:var(--pink2);word-break:break-all;flex:1;min-width:200px;}
-.vs-row-badges{display:flex;gap:6px;flex-wrap:wrap;}
-.vs-row-arrow{color:var(--hint);font-size:16px;transition:transform .2s;margin-left:8px;flex-shrink:0;}
-.vs-row.open .vs-row-arrow{transform:rotate(180deg);}
-.vs-row-body{display:none;border-top:1px solid var(--border);padding:16px 20px;overflow-x:auto;}
-.vs-row.open .vs-row-body{display:block;}
-#vsPdfDrop,#uploadPdfDrop{border:2px dashed var(--border2);border-radius:14px;padding:24px;text-align:center;font-family:var(--mono);font-size:13px;color:var(--hint);cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:14px;}
-#vsPdfDrop:hover,#vsPdfDrop.dragover,#uploadPdfDrop:hover,#uploadPdfDrop.dragover{border-color:var(--pink);background:var(--pink-bg);}
-#vsPdfDrop.uploaded,#uploadPdfDrop.uploaded{border-color:var(--green);background:var(--green-bg);color:var(--green);}
-.vs-summary{display:flex;gap:16px;font-family:var(--mono);font-size:14px;align-items:center;}
-.vs-summary .vuln-count{color:var(--red);font-weight:600;}
-.vs-summary .safe-count{color:var(--green);}
-.vs-summary .tested-count{color:var(--muted);}
+.filler-status{font-family:var(--mono);font-size:14px;color:var(--muted);padding:16px 0;}
+.filler-status .count{color:var(--pink);font-weight:600;}
+.csv-preview{background:rgba(10,4,14,0.8);border:1px solid var(--border);border-radius:14px;padding:14px 18px;font-family:var(--mono);font-size:12px;color:var(--muted);max-height:200px;overflow:auto;margin:12px 0;}
+.csv-preview table{border-collapse:collapse;width:100%;}
+.csv-preview th{color:var(--pink2);text-align:left;padding:4px 8px;border-bottom:1px solid var(--border);font-size:11px;}
+.csv-preview td{padding:4px 8px;border-bottom:1px solid var(--border);font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
 @media(max-width:600px){
-  .row{flex-direction:column;gap:0;}
-  .status-bar{gap:12px;}
-  .wrap{padding:24px 14px 60px;}
-  .fe-header-row{gap:8px;}
-  .mode-switcher{width:100%;}
-  .mode-btn{flex:1;text-align:center;}
+  .wrap{padding:24px 12px 80px;}
+  .tab-switcher{width:100%;}
+  .tab-btn{flex:1;text-align:center;}
   .tier-switcher{width:100%;}
   .tier-btn{flex:1;text-align:center;}
 }
@@ -249,600 +179,151 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
 
   <div class="header">
     <div class="logo">
-      <div class="logo-bubble">&#x1FAE7;</div>
+      <div class="logo-bubble">&#x1F9CB;</div>
       <span class="logo-name">BubbleGum</span>
-      <span class="logo-tag">v5.0</span>
     </div>
-    <p class="tagline">// spam page scanner + form extractor + vuln scanner · find exploits · map form fields · test upload vectors</p>
+    <p class="tagline">// form extractor + form filler &middot; extract fields &middot; fill forms in bulk</p>
   </div>
 
-  <!-- STATUS BAR -->
-  <div class="status-bar" id="statusBar">
-    <div class="status-item" id="aiStatus">
-      <span class="sdot" id="aiDot"></span>
+  <div class="status-bar">
+    <div class="status-item">
+      <div class="sdot" id="aiDot"></div>
       <span class="slabel">anthropic</span>
       <span class="stext" id="aiText">no key</span>
     </div>
-    <span class="status-sep">|</span>
-    <div class="status-item" id="oaiStatus">
-      <span class="sdot" id="oaiDot"></span>
+    <div class="status-item">
+      <div class="sdot" id="oaiDot"></div>
       <span class="slabel">openai</span>
       <span class="stext" id="oaiText">no key</span>
     </div>
-    <span class="status-sep">|</span>
-    <div class="status-item" id="fcStatus">
-      <span class="sdot" id="fcDot"></span>
-      <span class="slabel">firecrawl</span>
-      <span class="stext" id="fcText">no key</span>
-    </div>
-    <span class="status-ts" id="statusTs">&mdash;</span>
+    <span class="status-ts" id="statusTs"></span>
   </div>
 
-  <!-- MODE SWITCHER -->
-  <div class="mode-switcher">
-    <button class="mode-btn active" id="modeScanner">Scanner</button>
-    <button class="mode-btn" id="modeExtractor">Form Extractor</button>
-    <button class="mode-btn" id="modeVuln">Vuln Scanner</button>
-    <button class="mode-btn" id="modeUpload">Upload PDF</button>
+  <div class="tab-switcher">
+    <button class="tab-btn active" id="tabExtractor">Form Extractor</button>
+    <button class="tab-btn" id="tabFiller">Form Filler</button>
   </div>
 
-  <!-- CONFIG CARD -->
-  <div class="card">
-    <div class="sl">Configuration</div>
-    <div class="row" id="keyRow1">
-      <div class="field" id="fcKeyField">
-        <label>Firecrawl API Key <span id="fcKeyLabel" class="opt">optional · form extractor only</span></label>
-        <input type="password" id="fcKey" placeholder="fc-xxxxxxxxxxxxxxxx"/>
-      </div>
-      <div class="field" id="aiKeyField">
-        <label>Anthropic API Key <span id="aiKeyLabel" class="opt">optional &middot; improves accuracy</span></label>
-        <input type="password" id="aiKey" placeholder="sk-ant-xxxxxxxx"/>
-      </div>
-    </div>
-    <div class="row" id="keyRow2">
+  <div class="card" id="keysCard">
+    <div class="sl">API Keys <span style="font-size:11px;color:var(--hint);text-transform:none;letter-spacing:0;font-weight:400;">(only needed for AI tier)</span></div>
+    <div class="row">
       <div class="field">
-        <label>OpenAI API Key <span id="oaiKeyLabel" class="opt">optional</span></label>
-        <input type="password" id="oaiKey" placeholder="sk-xxxxxxxxxxxxxxxx"/>
+        <label>Anthropic API Key</label>
+        <input type="password" id="aiKey" placeholder="sk-ant-..." autocomplete="off">
       </div>
       <div class="field">
-        <label>AI Model</label>
-        <select id="modelSelect">
-          <optgroup label="Claude (Anthropic)">
-            <option value="claude-sonnet-4-6" selected>Sonnet 4.6 (recommended)</option>
-            <option value="claude-opus-4-6">Opus 4.6</option>
-            <option value="claude-haiku-4-5-20251001">Haiku 4.5 (fastest/cheapest)</option>
-            <option value="claude-sonnet-4-5-20250514">Sonnet 4.5</option>
-            <option value="claude-3-5-sonnet-20241022">3.5 Sonnet v2</option>
-            <option value="claude-3-5-haiku-20241022">3.5 Haiku</option>
-            <option value="claude-3-opus-20240229">3 Opus</option>
-            <option value="claude-3-haiku-20240307">3 Haiku</option>
-            <option value="claude-sonnet-4-6:websearch">Sonnet 4.6 + Web Search</option>
-            <option value="claude-opus-4-6:websearch">Opus 4.6 + Web Search</option>
-          </optgroup>
-          <optgroup label="OpenAI">
-            <option value="gpt-4o">GPT-4o</option>
-            <option value="gpt-4o-mini">GPT-4o Mini</option>
-            <option value="gpt-4.1">GPT-4.1</option>
-            <option value="gpt-4.1-mini">GPT-4.1 Mini</option>
-            <option value="gpt-4.1-nano">GPT-4.1 Nano</option>
-            <option value="o3">o3</option>
-            <option value="o3-mini">o3 Mini</option>
-            <option value="o1">o1</option>
-            <option value="o1-mini">o1 Mini</option>
-            <option value="gpt-4o-search-preview">GPT-4o Search (web search)</option>
-          </optgroup>
-        </select>
+        <label>OpenAI API Key</label>
+        <input type="password" id="oaiKey" placeholder="sk-..." autocomplete="off">
       </div>
     </div>
-    <div id="scannerConfig">
-      <div class="field">
-        <label>Spammer URL <span class="opt">from Google abuse email</span></label>
-        <input type="text" id="urlInput" placeholder="https://victim-site.com/wp-content/uploads/spam.pdf"/>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" id="scanBtn">Run Scan &rarr;</button>
-        <button class="btn btn-outline" id="estimateBtn">Estimate Pages</button>
-        <button class="btn btn-pause hidden" id="pauseBtn">&#9208; Pause</button>
-        <button class="btn btn-stop hidden" id="stopBtn">&#9632; Stop</button>
-        <span class="live-badge hidden" id="liveBadge">scanning...</span>
-      </div>
+    <div class="field">
+      <label>AI Model</label>
+      <select id="modelSelect">
+        <optgroup label="Anthropic">
+          <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+          <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+        </optgroup>
+        <optgroup label="OpenAI">
+          <option value="gpt-4o">GPT-4o</option>
+          <option value="gpt-4o-mini">GPT-4o Mini</option>
+        </optgroup>
+      </select>
     </div>
-    <div id="extractorConfig" class="hidden">
-      <div class="tier-switcher" id="tierSwitcher">
+  </div>
+
+  <!-- TAB 1: FORM EXTRACTOR -->
+  <div id="extractorTab">
+    <div class="card">
+      <div class="sl">Form Extractor</div>
+      <div class="tier-switcher" id="feModeSwitcher">
+        <button class="tier-btn active" data-femode="single">Single Step</button>
+        <button class="tier-btn" data-femode="multi">Multi Step</button>
+      </div>
+      <div class="tier-hint" id="feModeHint">Extracts fields from a single-page form</div>
+      <div class="tier-switcher" id="tierSwitcher" style="margin-top:8px;">
         <button class="tier-btn active" data-tier="basic">Basic</button>
-        <button class="tier-btn" data-tier="firecrawl">Firecrawl</button>
         <button class="tier-btn" data-tier="ai">AI</button>
       </div>
-      <div class="tier-hint" id="tierHint">DOM-only extraction &mdash; no API keys needed, won't work for JS-rendered forms</div>
+      <div class="tier-hint" id="tierHint">DOM-only extraction &mdash; no API keys needed</div>
       <div class="field">
-        <label>Site URL <span class="req">required</span></label>
-        <input type="text" id="feUrl" placeholder="https://your-site.com"/>
+        <label>Page URL <span class="req">*</span></label>
+        <input type="text" id="feUrl" placeholder="https://example.com/scholarship-application">
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="feBtn">Extract Forms &rarr;</button>
-        <button class="btn btn-pause hidden" id="fePauseBtn">&#9208; Pause</button>
-        <button class="btn btn-stop hidden" id="feStopBtn">&#9632; Stop</button>
-        <span class="live-badge hidden" id="feLiveBadge">extracting...</span>
+        <button class="btn-stop hidden" id="feStopBtn" onclick="feStopExtraction()">&#x25A0; Stop</button>
+        <span class="live-badge hidden" id="feLiveBadge">ready</span>
+        <span class="tier-badge" id="feTierBadge" style="display:none"></span>
       </div>
     </div>
-    <div id="vulnConfig" class="hidden">
-      <div id="vsPdfDrop" onclick="document.getElementById('vsPdfInput').click()">
-        Drop a dummy PDF here or click to browse
-        <input type="file" id="vsPdfInput" accept=".pdf" style="display:none">
+    <div class="card hidden" id="logSection">
+      <div class="sl">Log</div>
+      <div class="logbox" id="logBox"></div>
+      <div id="pWrap" class="hidden">
+        <div class="pbar-wrap"><div class="pbar-fill" id="pFill" style="width:0%"></div></div>
+        <div class="plabel" id="pLabel"></div>
       </div>
-      <div class="field">
-        <label>Target URLs <span class="req">one per line</span></label>
-        <textarea id="vsUrls" style="width:100%;padding:14px 16px;background:var(--surface2);border:1px solid var(--border2);border-radius:14px;font-family:var(--mono);font-size:14px;color:var(--text);outline:none;min-height:120px;resize:vertical;" placeholder="https://site1.com&#10;https://site2.com&#10;https://site3.com"></textarea>
-      </div>
-      <div class="row">
-        <div class="field" style="flex:0 0 120px;">
-          <label>Timeout (s)</label>
-          <input type="text" id="vsTimeout" value="10" style="text-align:center;">
-        </div>
-        <div class="field" style="flex:0 0 120px;">
-          <label>Delay (s)</label>
-          <input type="text" id="vsDelay" value="0.5" style="text-align:center;">
+    </div>
+    <div class="card hidden" id="feResultSection">
+      <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px;">
+        <span class="sl" style="margin-bottom:0">Extracted Forms</span>
+        <span id="feCount" style="font-family:var(--mono);font-size:13px;color:var(--hint);"></span>
+        <div style="margin-left:auto;display:flex;gap:8px;">
+          <button class="btn-export" onclick="feExportCsv()">Export CSV</button>
+          <button class="btn-export" onclick="feExportJson()">Export JSON</button>
         </div>
       </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" id="vsBtn">Run Vuln Scan &rarr;</button>
-        <button class="btn btn-pause hidden" id="vsPauseBtn">&#9208; Pause</button>
-        <button class="btn btn-stop hidden" id="vsStopBtn">&#9632; Stop</button>
-        <span class="live-badge hidden" id="vsLiveBadge">scanning...</span>
-      </div>
+      <div class="result-list" id="feList"></div>
     </div>
-    <div id="uploadConfig" class="hidden">
-      <div class="tier-switcher" id="uploadModeSwitcher">
-        <button class="tier-btn active" data-umode="auto">Auto (Spammer URL)</button>
-        <button class="tier-btn" data-umode="form_page">Form Page URL</button>
-        <button class="tier-btn" data-umode="direct">Direct Endpoint URL</button>
-      </div>
-      <div class="tier-hint" id="uploadModeHint">Parses spammer URL &rarr; identifies plugin &rarr; uploads directly (no AI needed)</div>
+  </div>
+
+  <!-- TAB 2: FORM FILLER -->
+  <div id="fillerTab" class="hidden">
+    <div class="card">
+      <div class="sl">Form Filler</div>
+      <div class="tier-hint">Upload one CSV per site. First column = URL. Remaining columns = field data. AI maps columns to form fields automatically. API key required.</div>
       <div class="field">
-        <label id="uploadUrlLabel">Spammer URL <span class="req">required</span></label>
-        <input type="text" id="uploadUrl" placeholder="https://example.com/wp-content/uploads/ninja-forms/29/spam.pdf"/>
+        <label>CSV Files <span class="req">*</span> <span class="opt">one file per site &middot; add as many as needed</span></label>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <input type="file" id="ffCsvInput" accept=".csv" multiple style="display:none">
+          <button class="btn-outline" onclick="document.getElementById('ffCsvInput').click()">Add CSV Files</button>
+          <span id="ffFileName" style="font-family:var(--mono);font-size:13px;color:var(--hint);">No files added</span>
+        </div>
       </div>
-      <div id="uploadPdfDrop" onclick="document.getElementById('uploadPdfInput').click()">
-        Drop your PDF here or click to browse
-        <input type="file" id="uploadPdfInput" accept=".pdf" style="display:none">
-      </div>
+      <div id="ffFileList"></div>
+      <div class="csv-preview hidden" id="ffPreview"></div>
       <div class="btn-row">
-        <button class="btn btn-primary" id="uploadBtn">Upload PDF &rarr;</button>
-        <span class="live-badge hidden" id="uploadLiveBadge">uploading...</span>
+        <button class="btn btn-primary" id="ffStartBtn" disabled>Start Filling &rarr;</button>
+        <button class="btn btn-primary hidden" id="ffNextBtn">Next Row &rarr;</button>
+        <button class="btn-stop hidden" id="ffStopBtn">&#x25A0; Stop</button>
+        <button class="btn-export hidden" id="ffResultsBtn" onclick="ffDownloadResults()">Download Results CSV</button>
+        <span class="live-badge hidden" id="ffLiveBadge">ready</span>
       </div>
     </div>
-  </div>
-
-  <!-- LOG -->
-  <div id="logSection" class="card hidden">
-    <div class="sl">Scan Log</div>
-    <div class="logbox" id="logBox"></div>
-    <div id="pWrap" class="hidden" style="margin-top:4px;">
-      <div class="pbar-wrap"><div class="pbar-fill" id="pFill" style="width:0%"></div></div>
-      <div class="plabel" id="pLabel"></div>
-    </div>
-  </div>
-
-  <!-- EXPLOIT RESULTS -->
-  <div id="exploitSection" class="card hidden">
-    <div class="sec-head">
-      <span class="sec-title" style="color:var(--pink);">Confirmed Exploit Pages</span>
-      <span class="sec-count" id="eCount"></span>
-      <button class="btn btn-outline hidden" id="reAnalyzeBtn" style="margin-left:auto;">Verify with AI &rarr;</button>
-    </div>
-    <div class="result-list" id="eList"></div>
-  </div>
-
-  <!-- FORM EXTRACTOR RESULTS -->
-  <div id="feResultSection" class="card hidden">
-    <div class="fe-header-row">
-      <span class="sec-title" style="color:var(--pink);">Extracted Forms</span>
-      <span class="sec-count" id="feCount"></span>
-      <span class="credit-badge" id="feCreditBadge">0 credits used</span>
-      <span class="tier-badge" id="feTierBadge" style="display:none"></span>
-      <div style="margin-left:auto;display:flex;gap:8px;">
-        <button class="btn-export" id="feExportJsonBtn">Export JSON</button>
-        <button class="btn-export" id="feExportCsvBtn">Export CSV</button>
-      </div>
-    </div>
-    <div id="feList"></div>
-  </div>
-
-  <!-- VULN SCANNER RESULTS -->
-  <div id="vsResultSection" class="card hidden">
-    <div class="fe-header-row">
-      <span class="sec-title" style="color:var(--pink);">Vulnerability Results</span>
-      <span class="sec-count" id="vsCount"></span>
-      <span id="vsSummary" class="vs-summary"></span>
-      <div style="margin-left:auto;display:flex;gap:8px;">
-        <button class="btn-export" id="vsExportJsonBtn">Export JSON</button>
-        <button class="btn-export" id="vsExportCsvBtn">Export CSV</button>
-      </div>
-    </div>
-    <div id="vsList"></div>
-  </div>
-
-  <!-- UPLOAD PDF RESULTS -->
-  <div id="uploadResultSection" class="card hidden">
-    <div class="fe-header-row">
-      <span class="sec-title" style="color:var(--pink);">Upload Results</span>
-      <span class="sec-count" id="uploadCount"></span>
-    </div>
-    <div id="uploadAnalysis" class="hidden" style="margin-bottom:16px;">
-      <div class="sl">AI Analysis</div>
-      <div id="uploadAnalysisContent" style="font-family:var(--mono);font-size:13px;color:var(--muted);line-height:1.8;"></div>
-    </div>
-    <div id="uploadTechniquesList"></div>
-    <div id="uploadVerifiedBox" class="hidden" style="margin-top:18px;padding:20px 24px;background:var(--green-bg);border:2px solid rgba(34,197,94,0.35);border-radius:16px;">
-      <div style="font-family:var(--mono);font-size:12px;color:var(--green);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Verified Upload URL</div>
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <a id="uploadVerifiedLink" href="#" target="_blank" style="font-family:var(--mono);font-size:15px;color:var(--green);word-break:break-all;flex:1;min-width:200px;"></a>
-        <button class="btn-export" id="uploadCopyBtn" style="flex-shrink:0;">Copy URL</button>
-      </div>
-    </div>
-    <div id="uploadPartialBox" class="hidden" style="margin-top:18px;padding:20px 24px;background:rgba(245,158,11,0.08);border:2px solid rgba(245,158,11,0.35);border-radius:16px;">
-      <div style="font-family:var(--mono);font-size:12px;color:#f59e0b;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Unverified URL</div>
-      <div style="font-family:var(--mono);font-size:12px;color:#f59e0b;margin-bottom:10px;">Could not confirm PDF at this location — the URL was extracted but may not be the uploaded file.</div>
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <a id="uploadPartialLink" href="#" target="_blank" style="font-family:var(--mono);font-size:15px;color:#f59e0b;word-break:break-all;flex:1;min-width:200px;"></a>
-        <button class="btn-export" id="uploadPartialCopyBtn" style="flex-shrink:0;">Copy URL</button>
-      </div>
-    </div>
-    <div id="uploadFailBox" class="hidden" style="margin-top:18px;padding:20px 24px;background:var(--red-bg);border:2px solid rgba(239,68,68,0.25);border-radius:16px;">
-      <div style="font-family:var(--mono);font-size:12px;color:var(--red);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Upload Failed</div>
-      <div id="uploadFailMsg" style="font-family:var(--mono);font-size:13px;color:var(--red);line-height:1.6;"></div>
+    <div class="card hidden" id="ffStatusCard">
+      <div class="sl">Filling Status</div>
+      <div class="logbox" id="ffLogBox"></div>
+      <div class="filler-status" id="ffStatus"></div>
     </div>
   </div>
 
 </div>
 
 <script>
-// ─── CONSTANTS ──────────────────────────────────────────────────
-
-const SIGNALS = {
-  file_upload: ['upload', 'file upload', 'choose file', 'select file', 'browse file',
-    'attachment', 'drag and drop', 'drop files', 'event banner', 'event image',
-    'maximum file size', 'mb allowed', 'supported format', 'organizer logo', 'venue logo',
-    'upload resume', 'upload cv', 'upload your resume', 'upload your cv', 'attach resume',
-    'profile photo', 'upload photo', 'upload avatar', 'change avatar', 'upload picture',
-    'import file', 'import csv', 'import data', 'upload document', 'attach document',
-    'attach file', 'add attachment', 'upload portfolio'],
-  registration: ['register', 'create account', 'sign up', 'signup', 'choose a password',
-    'confirm password', 'join now', 'create profile', 'new account', 'registration form',
-    'register now', 'sign up now', 'create your account', 'choose username', 'pick a username',
-    'enter username', 'sign in with google', 'sign in with facebook', 'sign up with google',
-    'sign up with facebook', 'continue with google', 'social login', 'retype password',
-    'repeat password', 'confirm your password', 'verify password'],
-  event_submit: ['submit event', 'post event', 'add event', 'create event', 'event title',
-    'event date', 'event description', 'event start', 'event end', 'submit listing',
-    'post a listing', 'listing title', 'booking form', 'book now', 'rsvp',
-    'organizer name', 'organizer email', 'event organizer', 'event category', 'event type',
-    'event cost', 'event price', 'event location', 'add to calendar', 'calendar event',
-    'event venue', 'event registration'],
-  contact_form: ['contact us', 'send message', 'your name', 'your email', 'your message',
-    'get in touch', 'send us', 'inquiry form', 'enquiry',
-    'first name', 'last name', 'full name', 'phone number', 'your phone', 'subject',
-    'message subject', 'email us', 'drop us a line', 'write to us', 'reach out',
-    'contact form', 'send inquiry', 'send enquiry'],
-  comment: ['leave a comment', 'post a comment', 'add a comment', 'write a comment',
-    'comment here', 'join the discussion', 'leave a reply',
-    'submit comment', 'post reply', 'post a reply', 'share your thoughts',
-    'add your comment', 'your comment'],
-  guest_post: ['write for us', 'guest post', 'submit article', 'submit story', 'submit post',
-    'contribute', 'contributor guidelines', 'guest author', 'become a contributor',
-    'submit a guest post', 'pitch your story', 'editorial guidelines', 'submit content'],
-  directory_listing: ['add business', 'submit listing', 'business directory', 'post ad',
-    'post an ad', 'classified', 'classifieds', 'free listing', 'add listing', 'add your business',
-    'list your business', 'business listing', 'directory submission', 'add a listing'],
-  testimonial_review: ['write a review', 'leave a review', 'rate us', 'testimonial',
-    'star rating', 'customer review', 'submit review', 'your review', 'product review',
-    'rate this', 'share your experience', 'write review', 'leave review', 'submit testimonial'],
-  job_application: ['apply now', 'upload resume', 'upload cv', 'career', 'careers',
-    'job application', 'cover letter', 'portfolio', 'join our team', 'apply for this job',
-    'submit application', 'apply here', 'send your resume', 'work with us', 'we are hiring',
-    'job opening', 'open position', 'submit your resume'],
-  petition_signature: ['sign petition', 'add your signature', 'add signature', 'support cause',
-    'pledge', 'sign this petition', 'add your name', 'stand with us', 'take action'],
-  wiki_knowledge: ['edit page', 'edit this page', 'create page', 'create new page',
-    'new article', 'wiki', 'suggest an edit', 'suggest edit', 'edit article',
-    'improve this article', 'contribute to this page'],
-  report_complaint: ['report issue', 'file complaint', 'file a complaint', 'submit report',
-    'grievance', 'whistleblower', 'report abuse', 'report a problem', 'submit complaint',
-    'lodge complaint', 'raise a concern', 'report violation'],
-  suggestion_idea: ['suggestion box', 'submit idea', 'submit an idea', 'feedback form',
-    'feature request', 'improvement suggestion', 'submit suggestion', 'share your idea',
-    'submit feedback', 'your suggestion', 'propose an idea'],
-  survey_poll: ['take survey', 'take our survey', 'questionnaire', 'poll', 'vote',
-    'quiz', 'assessment', 'complete survey', 'fill out survey', 'participate in survey',
-    'survey form', 'start survey', 'begin assessment'],
-  donation_volunteer: ['donate', 'donate now', 'volunteer', 'fundraiser', 'sponsor',
-    'become a volunteer', 'make a donation', 'give now', 'support us', 'contribute funds',
-    'volunteer signup', 'volunteer registration', 'fundraise'],
-  membership: ['become a member', 'join us', 'join now', 'enroll', 'membership form',
-    'member registration', 'membership application', 'sign up for membership',
-    'member signup', 'join our community'],
-  vendor_supplier: ['vendor registration', 'become a vendor', 'partner with us',
-    'affiliate signup', 'seller registration', 'become a seller', 'vendor application',
-    'supplier registration', 'become a partner', 'affiliate registration',
-    'reseller application', 'merchant signup'],
-  support_helpdesk: ['open ticket', 'submit ticket', 'support request', 'help request',
-    'new ticket', 'create a case', 'open a ticket', 'submit a ticket', 'create ticket',
-    'support form', 'help desk', 'service request'],
-  scholarship_application: ['apply for scholarship', 'grant application', 'scholarship form',
-    'personal statement', 'scholarship application', 'apply for grant', 'financial aid form',
-    'fellowship application'],
-  newsletter_subscription: ['subscribe', 'newsletter', 'mailing list', 'join our list',
-    'email updates', 'subscribe now', 'sign up for updates', 'get updates',
-    'subscribe to newsletter', 'email subscription', 'stay updated'],
-  forum_discussion: ['new topic', 'create thread', 'start discussion', 'post reply',
-    'new post', 'ask a question', 'start a thread', 'create new topic', 'new discussion',
-    'post a question', 'ask the community'],
-  government_municipal: ['public comment', 'citizen request', 'service request',
-    'permit application', 'license application', 'foia', 'foia request',
-    'public hearing', 'submit public comment', 'citizen complaint', 'zoning request'],
-  education: ['admission', 'course registration', 'enroll', 'student application',
-    'transcript request', 'admissions form', 'apply for admission', 'enrollment form',
-    'register for course', 'tuition payment'],
-  medical_patient: ['patient form', 'intake form', 'appointment', 'referral',
-    'medical history', 'prescription refill', 'patient registration', 'book appointment',
-    'schedule appointment', 'patient intake', 'health form', 'telehealth', 'consultation'],
-  real_estate: ['list property', 'property listing', 'rental application', 'schedule viewing',
-    'list your property', 'submit property', 'tenant application', 'schedule a tour',
-    'request showing', 'property submission'],
-  ecommerce: ['seller registration', 'product review', 'request quote', 'return request',
-    'request a quote', 'get a quote', 'submit return', 'exchange request',
-    'become a seller', 'vendor signup'],
-  award_competition: ['submit entry', 'enter competition', 'nomination', 'nominate',
-    'call for entries', 'submit nomination', 'enter contest', 'call for papers',
-    'submit abstract', 'competition entry']
-};
-
-const VULN_KEYWORDS = ['upload', 'register', 'signup', 'submit', 'contact', 'apply',
-  'join', 'profile', 'create', 'account', 'form', 'post', 'comment', 'feedback',
-  'guestbook', 'event', 'booking', 'file', 'media', 'attachment', 'member', 'user',
-  'forum', 'pdf', 'banner', 'listing',
-  'resume', 'cv', 'career', 'vacancy', 'job', 'application', 'hire', 'hiring', 'recruit',
-  'petition', 'signature', 'pledge', 'wiki', 'article', 'directory', 'classified',
-  'testimonial', 'review', 'rating', 'recommend', 'scholarship', 'grant', 'fellowship',
-  'subscribe', 'newsletter', 'digest', 'topic', 'thread', 'discussion', 'reply',
-  'question', 'answer', 'contribute', 'contributor', 'author', 'writer', 'guest', 'blog',
-  'complaint', 'grievance', 'whistleblower', 'abuse', 'violation', 'flag', 'dmca',
-  'suggestion', 'idea', 'proposal', 'survey', 'poll', 'vote', 'quiz', 'questionnaire',
-  'donate', 'donation', 'fundraiser', 'sponsor', 'volunteer', 'membership', 'enroll',
-  'vendor', 'supplier', 'partner', 'affiliate', 'reseller', 'seller', 'merchant',
-  'helpdesk', 'ticket', 'case', 'webinar', 'workshop', 'seminar', 'conference',
-  'property', 'estate', 'rental', 'lease', 'patient', 'medical', 'intake', 'referral',
-  'appointment', 'schedule', 'permit', 'license', 'foia', 'admission', 'transcript',
-  'nomination', 'contest', 'competition', 'entry', 'document', 'paperwork',
-  'catalog', 'whitepaper', 'brochure', 'ebook', 'download', 'quote', 'estimate',
-  'rma', 'warranty', 'refund', 'claim', 'dispute', 'onboarding', 'recipe'];
-
-// ─── URL PATH ANALYSIS ─────────────────────────────────────────
-
-function parseSpammerUrl(spammerUrl) {
-  try {
-    const parsed = new URL(spammerUrl);
-    const path = parsed.pathname.toLowerCase();
-    const segments = path.split('/').filter(Boolean);
-
-    const result = {
-      cms: null, formModule: null, formName: null,
-      exploitType: null, searchTerms: [], probePaths: []
-    };
-
-    // CMS detection from path
-    if (path.includes('/sites/default/')) result.cms = 'drupal';
-    else if (path.includes('/wp-content/') || path.includes('/wp-admin/')) result.cms = 'wordpress';
-    else if (path.includes('/components/com_') || path.includes('/media/com_')) result.cms = 'joomla';
-
-    // Exploit type from file extension
-    if (path.match(/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|exe|png|jpg|jpeg|gif|svg|txt|csv|html?)$/i)) {
-      result.exploitType = 'file_upload';
-    }
-
-    // Drupal: /sites/default/files/webform/{formname}/
-    const drupalWF = path.match(/\/webform\/([a-z0-9_-]+)/);
-    if (drupalWF) {
-      result.formModule = 'webform';
-      result.formName = drupalWF[1];
-      result.searchTerms.push(drupalWF[1]);
-      result.probePaths.push('/' + drupalWF[1], '/form/' + drupalWF[1]);
-    }
-
-    // Drupal: /sites/default/files/{module}/
-    if (!drupalWF && result.cms === 'drupal') {
-      const dm = path.match(/\/sites\/default\/files\/([a-z0-9_-]+)\//);
-      if (dm && !['css','js','styles','languages','php','ctools','pictures','field'].includes(dm[1])) {
-        result.formModule = dm[1];
-        result.searchTerms.push(dm[1]);
-        result.probePaths.push('/' + dm[1]);
-      }
-    }
-
-    // WordPress: /wp-content/plugins/{plugin}/
-    const wpPlugin = path.match(/\/wp-content\/plugins\/([a-z0-9_-]+)/);
-    if (wpPlugin) {
-      result.formModule = wpPlugin[1];
-      result.searchTerms.push(wpPlugin[1].replace(/-/g, ' '));
-      result.searchTerms.push(wpPlugin[1]);
-    }
-
-    // WordPress form plugins: /wp-content/uploads/{upload_dir}/
-    const wpFormPlugins = {
-      'wpforms': 'wpforms', 'wpcf7_uploads': 'contact-form-7',
-      'gravity_forms': 'gravity-forms', 'formidable': 'formidable',
-      'ninja-forms': 'ninja-forms', 'forminator': 'forminator',
-      'everest_forms': 'everest-forms', 'ws_form': 'ws-form'
-    };
-    const wpUpload = path.match(/\/wp-content\/uploads\/([a-z0-9_-]+)\//);
-    if (wpUpload && wpFormPlugins[wpUpload[1]]) {
-      result.formModule = wpFormPlugins[wpUpload[1]];
-      result.searchTerms.push(wpFormPlugins[wpUpload[1]]);
-    }
-
-    if (path.includes('/wp-content/uploads/')) result.exploitType = 'file_upload';
-
-    // Joomla: /components/com_{component}/
-    const joomlaComp = path.match(/\/com_([a-z0-9_]+)/);
-    if (joomlaComp) {
-      result.formModule = 'com_' + joomlaComp[1];
-      result.searchTerms.push(joomlaComp[1]);
-    }
-
-    // Generic form-related path segments
-    const formTerms = ['contact','feedback','upload','submit','register','signup','apply',
-      'join','report','signal','form','booking','event','listing','profile','guestbook',
-      'comment','review','ticket','support','inquiry','request','webform',
-      'career','careers','jobs','vacancy','hire','recruitment','resume','cv',
-      'petition','signature','wiki','article','knowledge','knowledgebase','kb','faq',
-      'directory','classified','classifieds','ads','add-listing','add-business',
-      'testimonial','testimonials','reviews','ratings',
-      'scholarship','grant','fellowship','financial-aid',
-      'subscribe','newsletter','mailing-list','optin',
-      'forums','topic','thread','discussion','community','ask','qa',
-      'blog','guest-post','contribute','write-for-us','submit-article','editorial','author',
-      'complaint','complaints','grievance','whistleblower','abuse','report-abuse','flag','dmca',
-      'suggestion','suggestions','idea','ideas','proposal',
-      'survey','surveys','poll','polls','vote','quiz','questionnaire','assessment',
-      'donate','donation','donations','fundraiser','give','sponsor','volunteer',
-      'membership','members','enroll','enrollment','join-us',
-      'vendor','supplier','partner','affiliate','reseller','seller','merchant',
-      'helpdesk','help-desk','service-desk','tickets','new-ticket','open-ticket','cases',
-      'webinar','workshop','seminar','conference','training','session','class',
-      'property','properties','real-estate','rental','rentals','lease','tenant',
-      'recipe','recipes','submit-content','user-content',
-      'patient','medical','health','intake','appointment','appointments','referral','prescription','telehealth','consultation',
-      'permit','permits','license','licenses','foia','zoning','planning','citizen','government',
-      'admission','admissions','transcript','tuition','campus','student','course',
-      'nomination','nominate','competition','contest','award','submit-entry','call-for-papers',
-      'document','documents','docs','paperwork',
-      'catalog','brochure','whitepaper','ebook','downloads','resources',
-      'rma','warranty','returns','exchange','refund','claim','dispute',
-      'quote','estimate','pricing','invoice','rfq','rfp','request-quote',
-      'onboarding','setup','wizard','captcha','verify','verification'];
-    for (const seg of segments) {
-      for (const term of formTerms) {
-        const subParts = seg.split(/[-_]/);
-        if (seg === term || subParts.some(p => p === term || (term.length >= 4 && p.startsWith(term)))) {
-          if (!result.searchTerms.includes(term)) result.searchTerms.push(term);
-          if (!result.probePaths.some(p => p === '/' + seg)) result.probePaths.push('/' + seg);
-        }
-      }
-    }
-
-    result.searchTerms = [...new Set(result.searchTerms)];
-    result.probePaths = [...new Set(result.probePaths)];
-    return result;
-  } catch {
-    return { cms: null, formModule: null, formName: null, exploitType: null, searchTerms: [], probePaths: [] };
-  }
-}
-
-function scorePageByPath(pageUrl, urlClues) {
-  try {
-    const pagePath = new URL(pageUrl).pathname.toLowerCase();
-    let score = 0;
-    const matches = [];
-    for (const term of urlClues.searchTerms) {
-      if (pagePath.includes(term.toLowerCase())) {
-        score += 10;
-        matches.push(term);
-      }
-    }
-    if (pagePath.match(/\/(contact|form|upload|register|submit|apply|feedback|report|signal|webform|booking|event|listing|ticket|guest-post|write-for-us|submit-article|contribute|add-listing|post-a|create|directory|review|career|job|jobs|donate|volunteer|survey|support|petition|forum|membership|signup|sign-up|subscribe|quote|inquiry)/i)) {
-      score += 5;
-      if (!matches.length) matches.push('form-path');
-    }
-    return { score, matches };
-  } catch {
-    return { score: 0, matches: [] };
-  }
-}
-
-function detectFormsInHtml(html) {
-  if (!html) return null;
-  const hasForm = /<form[\s>]/i.test(html);
-  const hasFileInput = /<input[^>]*type\s*=\s*["']?file/i.test(html);
-  const hasTextInput = /<input[^>]*type\s*=\s*["']?(text|email|password|tel|url|number)/i.test(html)
-    || /<textarea[\s>]/i.test(html);
-  const hasSelect = /<select[\s>]/i.test(html);
-  const hasContentEditable = /contenteditable\s*=\s*["']?true/i.test(html);
-  const hasAriaForm = /role\s*=\s*["']?form/i.test(html);
-  const hasJsFrameworkForm = /(gform_wrapper|wpforms|formidable|ninja-forms|caldera-form|wpcf7|frm_forms|elementor-form|gravity-form|contact-form-7|hs-form|mailchimp-form|mc4wp-form|wpem-main|wpem-form|event-manager-form|em-event-form)/i.test(html);
-  const hasInteractiveElements = hasFileInput || hasTextInput || hasSelect || hasContentEditable;
-  // Substantial = real form, not just a search bar or newsletter widget
-  const textInputCount = (html.match(/<input[^>]*type\s*=\s*["']?(text|email|password|tel|url|number)/gi) || []).length
-    + (html.match(/<textarea[\s>]/gi) || []).length;
-  const hasSubstantialForm = hasFileInput || hasJsFrameworkForm
-    || (hasForm && textInputCount >= 2)
-    || (hasForm && hasTextInput && hasSelect);
-  return {
-    hasForm: hasForm || hasAriaForm || hasJsFrameworkForm,
-    hasFileInput, hasTextInput, hasInteractiveElements,
-    hasSubstantialForm,
-    formCount: (html.match(/<form[\s>]/gi) || []).length
-  };
-}
-
-function detectFormsInMarkdown(markdown) {
-  if (!markdown) return { hasFormIndicators: false, indicators: [] };
-  const indicators = [];
-  // Button / CTA text
-  if (/\b(submit|send message|send inquiry|apply now|sign up|register|enroll|subscribe|upload|post comment|add listing|file a complaint|request a quote|get started|join now|create account|sign in|log in)\b/i.test(markdown))
-    indicators.push('submit/action button text');
-  // Placeholder / input patterns
-  if (/(enter your|type your|your name|your email|your phone|your message|your address|first name|last name|full name|email address|phone number|company name)/i.test(markdown))
-    indicators.push('form field labels');
-  // Required field markers
-  if (/\*\s*(required|mandatory)/i.test(markdown) || /\bRequired\s+fields?\b/i.test(markdown))
-    indicators.push('required field markers');
-  // Checkbox-style inputs from markdown rendering
-  if (/\[[ x]\]/i.test(markdown) && /(agree|terms|consent|opt.?in|subscribe)/i.test(markdown))
-    indicators.push('checkbox/consent fields');
-  // File upload references
-  if (/\b(attach|upload|drag.{0,10}drop|choose file|browse file|supported.{0,15}(pdf|doc|jpg|png))/i.test(markdown))
-    indicators.push('file upload reference');
-  // Dropdown / select references
-  if (/\b(select|choose|pick)\s+(a|an|your|one)\b/i.test(markdown) && /(country|state|category|department|topic|reason|type)/i.test(markdown))
-    indicators.push('dropdown/select reference');
-  // CAPTCHA presence (strong form signal)
-  if (/\b(captcha|recaptcha|hcaptcha|I('|')m not a robot)\b/i.test(markdown))
-    indicators.push('CAPTCHA detected');
-  const strongIndicator = indicators.some(i =>
-    i === 'file upload reference' || i === 'CAPTCHA detected' || i === 'required field markers');
-  return { hasFormIndicators: indicators.length >= 2 || strongIndicator, indicators };
-}
-
-// ─── STATE ──────────────────────────────────────────────────────
-
-let scanState = 'idle'; // idle | scanning | paused | stopped
-let exploitCount = 0;
+let currentTab = 'extractor';
+let currentTier = 'basic';
+let feMode = 'single'; // 'single' | 'multi'
+let feState = 'idle';
+let feResults = [];
+let ffJobs = [];        // [{name, csvText, rowCount, url}] — one per CSV file
+let ffCurrentJob = 0;
+let ffTotalRows = 0;
+let ffCompletedRows = 0;
+let ffActive = false;
+let ffResultsData = [];
 let statusDebounce = null;
-let statusTimer = null;
-let aiPluginKeywords = []; // extra keywords from AI analysis
-
-// ─── FORM EXTRACTOR STATE ─────────────────────────────────────
-
-let feState = 'idle';       // idle | scanning | paused | stopped
-let feResults = [];          // [{url, forms: [{plugin, is_multi_step, fields: [...]}], tier}]
-let feCreditsUsed = 0;
-let currentMode = 'scanner'; // 'scanner' | 'extractor' | 'vuln' | 'upload'
-let uploadMode = 'auto'; // 'auto' | 'form_page' | 'direct'
-let uploadPdfFile = null;     // File object from picker
-let currentTier = 'basic';   // 'basic' | 'firecrawl' | 'ai'
-let cachedCrawlPages = [];   // keyword-hit pages cached for AI re-analysis
-let cachedPlugin = null;     // plugin name from initial scan (or null)
-
-// ─── VULN SCANNER STATE ─────────────────────────────────────
-
-let vsState = 'idle';        // idle | scanning | paused | stopped
-let vsResults = [];
-let vsPdfReady = false;
-
-// ─── DOM HELPERS ────────────────────────────────────────────────
 
 const $ = id => document.getElementById(id);
-
 function show(id) { $(id).classList.remove('hidden'); }
 function hide(id) { $(id).classList.add('hidden'); }
 
@@ -857,30 +338,25 @@ function log(msg, type = 'info') {
   box.scrollTop = box.scrollHeight;
 }
 
+function ffLog(msg, type = 'info') {
+  const box = $('ffLogBox');
+  const line = document.createElement('div');
+  line.className = 'll';
+  const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  const cls = type === 'ok' ? 'lok' : type === 'warn' ? 'lwarn' : type === 'err' ? 'lerr' : 'linfo';
+  line.innerHTML = `<span class="lt">${ts}</span><span class="${cls}">${esc(msg)}</span>`;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
 function setProgress(done, total, label) {
   $('pFill').style.width = Math.round((done / Math.max(total, 1)) * 100) + '%';
   $('pLabel').textContent = label || `${done} / ${total}`;
 }
 
-function esc(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-function extractOrigin(url) {
-  try { return new URL(url.startsWith('http') ? url : 'https://' + url).origin; }
-  catch { return null; }
-}
-
-function extractHost(url) {
-  try { return new URL(url.startsWith('http') ? url : 'https://' + url).hostname; }
-  catch { return null; }
-}
-
-// ─── PROXY UTILITIES (zero-cost scanner) ────────────────────────
+function extractHost(url) { try { return new URL(url.startsWith('http') ? url : 'https://' + url).hostname; } catch { return null; } }
 
 function htmlToText(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -893,50 +369,8 @@ async function proxyFetch(url) {
   const html = await res.text();
   const status = parseInt(res.headers.get('X-Proxy-Status') || '0', 10);
   const finalUrl = res.headers.get('X-Proxy-Url') || url;
-  return { html, text: htmlToText(html), status, url: finalUrl, ok: res.ok };
-}
-
-async function proxyCrawl(siteRoot, maxPages = 100) {
-  const visited = new Set();
-  const queue = [siteRoot + '/'];
-  const results = [];
-  const NON_HTML = /\.(pdf|jpg|jpeg|png|gif|svg|webp|ico|css|js|woff2?|ttf|eot|zip|rar|exe|mp[34]|avi|mov|doc|xls|ppt|xml|json|rss|atom)$/i;
-
-  while (queue.length > 0 && results.length < maxPages) {
-    if (scanState === 'stopped') break;
-    while (scanState === 'paused') await sleep(400);
-
-    const current = queue.shift();
-    if (visited.has(current)) continue;
-    visited.add(current);
-
-    try {
-      const page = await proxyFetch(current);
-      if (!page.ok || page.status >= 400) continue;
-
-      results.push({ url: page.url, html: page.html, markdown: page.text });
-      setProgress(results.length, maxPages, `crawling · ${results.length} pages found`);
-
-      // Extract same-origin links
-      const doc = new DOMParser().parseFromString(page.html, 'text/html');
-      for (const a of doc.querySelectorAll('a[href]')) {
-        try {
-          const href = a.getAttribute('href');
-          if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('javascript:')) continue;
-          const resolved = new URL(href, current).href.split('#')[0].split('?')[0].replace(/\/+$/, '') || siteRoot;
-          if (!resolved.startsWith(siteRoot)) continue;
-          if (NON_HTML.test(resolved)) continue;
-          if (!visited.has(resolved) && !visited.has(resolved + '/')) {
-            queue.push(resolved);
-          }
-        } catch {}
-      }
-    } catch {}
-
-    await sleep(200);
-  }
-
-  return results;
+  const method = res.headers.get('X-Proxy-Method') || 'urllib';
+  return { html, text: htmlToText(html), status, url: finalUrl, ok: res.ok, method };
 }
 
 // ─── STATUS BAR ─────────────────────────────────────────────────
@@ -944,1644 +378,150 @@ async function proxyCrawl(siteRoot, maxPages = 100) {
 async function checkStatus() {
   const aiKey = $('aiKey').value.trim();
   const oaiKey = $('oaiKey').value.trim();
-  const fcKey = $('fcKey').value.trim();
   const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
-
-  // Save keys + model to localStorage
   localStorage.setItem('bg_aiKey', aiKey);
   localStorage.setItem('bg_oaiKey', oaiKey);
-  localStorage.setItem('bg_fcKey', fcKey);
   localStorage.setItem('bg_model', $('modelSelect').value);
 
-  // ── Anthropic check ──
-  const aiDot = $('aiDot');
-  const aiText = $('aiText');
-
-  if (!aiKey) {
-    aiDot.className = 'sdot';
-    aiText.className = 'stext';
-    aiText.textContent = 'no key';
-  } else {
-    aiDot.className = 'sdot chk';
-    aiText.className = 'stext';
-    aiText.textContent = 'checking...';
+  const aiDot = $('aiDot'), aiText = $('aiText');
+  if (!aiKey) { aiDot.className = 'sdot'; aiText.className = 'stext'; aiText.textContent = 'no key'; }
+  else {
+    aiDot.className = 'sdot chk'; aiText.textContent = 'checking...';
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': aiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 5,
-          messages: [{ role: 'user', content: 'hi' }]
-        })
+        headers: { 'Content-Type': 'application/json', 'x-api-key': aiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] })
       });
-
-      if (res.ok) {
-        aiDot.className = 'sdot on';
-        aiText.className = 'stext on';
-        aiText.textContent = 'online \u2713';
-      } else if (res.status === 529) {
-        aiDot.className = 'sdot err';
-        aiText.className = 'stext err';
-        aiText.textContent = 'overloaded \u2014 wait';
-      } else if (res.status === 401) {
-        aiDot.className = 'sdot err';
-        aiText.className = 'stext err';
-        aiText.textContent = 'invalid key';
-      } else {
-        let detail = 'error ' + res.status;
-        try {
-          const data = await res.json();
-          const msg = data.error?.message || '';
-          if (msg.includes('credit')) detail = 'no credits';
-          else if (msg.length < 50) detail = msg;
-        } catch {}
-        aiDot.className = 'sdot err';
-        aiText.className = 'stext err';
-        aiText.textContent = detail;
-      }
-    } catch (e) {
-      aiDot.className = 'sdot err';
-      aiText.className = 'stext err';
-      aiText.textContent = 'connection failed';
-    }
+      if (res.ok) { aiDot.className = 'sdot on'; aiText.className = 'stext on'; aiText.textContent = 'online \u2713'; }
+      else if (res.status === 401) { aiDot.className = 'sdot err'; aiText.className = 'stext err'; aiText.textContent = 'invalid key'; }
+      else { aiDot.className = 'sdot err'; aiText.className = 'stext err'; aiText.textContent = 'error ' + res.status; }
+    } catch { aiDot.className = 'sdot err'; aiText.className = 'stext err'; aiText.textContent = 'offline'; }
   }
 
-  // ── OpenAI check ──
-  const oaiDot = $('oaiDot');
-  const oaiText = $('oaiText');
-
-  if (!oaiKey) {
-    oaiDot.className = 'sdot';
-    oaiText.className = 'stext';
-    oaiText.textContent = 'no key';
-  } else {
-    oaiDot.className = 'sdot chk';
-    oaiText.className = 'stext';
-    oaiText.textContent = 'checking...';
+  const oaiDot = $('oaiDot'), oaiText = $('oaiText');
+  if (!oaiKey) { oaiDot.className = 'sdot'; oaiText.className = 'stext'; oaiText.textContent = 'no key'; }
+  else {
+    oaiDot.className = 'sdot chk'; oaiText.textContent = 'checking...';
     try {
-      const res = await fetch('https://api.openai.com/v1/models', {
-        headers: { 'Authorization': 'Bearer ' + oaiKey }
-      });
-
-      if (res.ok) {
-        oaiDot.className = 'sdot on';
-        oaiText.className = 'stext on';
-        oaiText.textContent = 'online \u2713';
-      } else if (res.status === 401) {
-        oaiDot.className = 'sdot err';
-        oaiText.className = 'stext err';
-        oaiText.textContent = 'invalid key';
-      } else {
-        oaiDot.className = 'sdot err';
-        oaiText.className = 'stext err';
-        oaiText.textContent = 'error ' + res.status;
-      }
-    } catch (e) {
-      oaiDot.className = 'sdot err';
-      oaiText.className = 'stext err';
-      oaiText.textContent = 'connection failed';
-    }
+      const res = await fetch('https://api.openai.com/v1/models', { headers: { 'Authorization': 'Bearer ' + oaiKey } });
+      if (res.ok) { oaiDot.className = 'sdot on'; oaiText.className = 'stext on'; oaiText.textContent = 'online \u2713'; }
+      else { oaiDot.className = 'sdot err'; oaiText.className = 'stext err'; oaiText.textContent = res.status === 401 ? 'invalid key' : 'error ' + res.status; }
+    } catch { oaiDot.className = 'sdot err'; oaiText.className = 'stext err'; oaiText.textContent = 'offline'; }
   }
-
-  // ── Firecrawl check ──
-  const fcDot = $('fcDot');
-  const fcText = $('fcText');
-
-  if (!fcKey) {
-    fcDot.className = 'sdot';
-    fcText.className = 'stext';
-    fcText.textContent = 'no key';
-  } else {
-    fcDot.className = 'sdot chk';
-    fcText.className = 'stext';
-    fcText.textContent = 'checking...';
-    try {
-      const res = await fetch('https://api.firecrawl.dev/v1/team/credit-usage', {
-        headers: { 'Authorization': 'Bearer ' + fcKey }
-      });
-
-      if (res.ok) {
-        let credits = null;
-        try {
-          const data = await res.json();
-          credits = data.remaining_credits ?? data.credits_remaining ?? null;
-        } catch {}
-        fcDot.className = 'sdot on';
-        fcText.className = 'stext on';
-        fcText.textContent = credits !== null
-          ? `online \u2713 (${credits} credits left)`
-          : 'online \u2713';
-      } else if (res.status === 401 || res.status === 403) {
-        fcDot.className = 'sdot err';
-        fcText.className = 'stext err';
-        fcText.textContent = 'invalid key';
-      } else if (res.status === 402) {
-        fcDot.className = 'sdot err';
-        fcText.className = 'stext err';
-        fcText.textContent = 'credits exhausted';
-      } else {
-        fcDot.className = 'sdot err';
-        fcText.className = 'stext err';
-        fcText.textContent = 'error ' + res.status;
-      }
-    } catch (e) {
-      fcDot.className = 'sdot err';
-      fcText.className = 'stext err';
-      fcText.textContent = 'connection failed';
-    }
-  }
-
   $('statusTs').textContent = 'checked ' + ts;
 }
 
-function scheduleStatusCheck() {
-  clearTimeout(statusDebounce);
-  statusDebounce = setTimeout(checkStatus, 1000);
-}
+function scheduleStatusCheck() { clearTimeout(statusDebounce); statusDebounce = setTimeout(checkStatus, 1000); }
 
-// ─── API: ANTHROPIC ─────────────────────────────────────────────
+// ─── AI CALLS ───────────────────────────────────────────────────
 
-async function callClaude(apiKey, model, systemOrNull, userMessage, maxTokens = 300) {
-  let actualModel = model;
-  let tools = undefined;
-  if (model.endsWith(':websearch')) {
-    actualModel = model.replace(':websearch', '');
-    tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
-  }
+function isOpenAIModel(m) { return m.startsWith('gpt-') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4'); }
 
-  const body = {
-    model: actualModel,
-    max_tokens: maxTokens,
-    messages: [{ role: 'user', content: userMessage }]
-  };
-  if (systemOrNull) body.system = systemOrNull;
-  if (tools) body.tools = tools;
-
+async function callClaude(apiKey, model, sys, msg, maxTok = 300) {
+  const body = { model, max_tokens: maxTok, messages: [{ role: 'user', content: msg }] };
+  if (sys) body.system = sys;
   const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
     body: JSON.stringify(body)
   });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`API ${res.status}: ${err.substring(0, 120)}`);
-  }
-
+  if (!res.ok) { const e = await res.text(); throw new Error(`API ${res.status}: ${e.substring(0, 120)}`); }
   const data = await res.json();
   return data.content?.filter(c => c.type === 'text').map(c => c.text).join('') || '';
 }
 
-function parseAIJSON(text) {
-  const m = text.match(/\{[\s\S]*?\}/);
-  return m ? JSON.parse(m[0]) : null;
-}
-
-// ─── API: OPENAI ────────────────────────────────────────────────
-
-function isOpenAIModel(model) {
-  return model.startsWith('gpt-') || model.startsWith('o1') || model.startsWith('o3') || model.startsWith('o4');
-}
-
-async function callOpenAI(apiKey, model, systemOrNull, userMessage, maxTokens = 300) {
-  const messages = [];
-  if (systemOrNull) messages.push({ role: 'system', content: systemOrNull });
-  messages.push({ role: 'user', content: userMessage });
-
-  const body = { model, messages };
-  body.max_completion_tokens = maxTokens;
-
+async function callOpenAI(apiKey, model, sys, msg, maxTok = 300) {
+  const messages = []; if (sys) messages.push({ role: 'system', content: sys }); messages.push({ role: 'user', content: msg });
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + apiKey
-    },
-    body: JSON.stringify(body)
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+    body: JSON.stringify({ model, messages, max_completion_tokens: maxTok })
   });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`OpenAI ${res.status}: ${err.substring(0, 120)}`);
-  }
-
+  if (!res.ok) { const e = await res.text(); throw new Error(`OpenAI ${res.status}: ${e.substring(0, 120)}`); }
   const data = await res.json();
   return data.choices?.[0]?.message?.content || '';
 }
 
-async function callAI(systemOrNull, userMessage, maxTokens) {
+async function callAI(sys, msg, maxTok) {
   const model = $('modelSelect').value;
-  if (isOpenAIModel(model)) {
-    const key = $('oaiKey').value.trim();
-    if (!key) throw new Error('OpenAI API key required for this model');
-    return callOpenAI(key, model, systemOrNull, userMessage, maxTokens);
-  } else {
-    const key = $('aiKey').value.trim();
-    if (!key) throw new Error('Anthropic API key required for this model');
-    return callClaude(key, model, systemOrNull, userMessage, maxTokens);
-  }
+  if (isOpenAIModel(model)) { const k = $('oaiKey').value.trim(); if (!k) throw new Error('OpenAI key required'); return callOpenAI(k, model, sys, msg, maxTok); }
+  else { const k = $('aiKey').value.trim(); if (!k) throw new Error('Anthropic key required'); return callClaude(k, model, sys, msg, maxTok); }
 }
 
-// ─── API: FIRECRAWL ─────────────────────────────────────────────
-
-async function startCrawl(fcKey, siteUrl, limit = 500) {
-  const res = await fetch('https://api.firecrawl.dev/v1/crawl', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + fcKey
-    },
-    body: JSON.stringify({
-      url: siteUrl,
-      limit,
-      scrapeOptions: { formats: ['markdown', 'rawHtml'], onlyMainContent: false }
-    })
-  });
-
-  if (!res.ok) throw new Error('Firecrawl start failed: HTTP ' + res.status);
-  const data = await res.json();
-  if (!data.success && !data.id) throw new Error(data.error || 'No crawl ID returned');
-  return data.id;
-}
-
-async function pollCrawl(fcKey, crawlId) {
-  const pages = [];
-  const seen = new Set();
-  let url = `https://api.firecrawl.dev/v1/crawl/${crawlId}`;
-
-  for (let attempt = 0; attempt < 120; attempt++) {
-    if (scanState === 'stopped') return pages;
-    while (scanState === 'paused') await sleep(400);
-
-    const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + fcKey } });
-    if (!res.ok) throw new Error('Poll failed: HTTP ' + res.status);
-    const data = await res.json();
-
-    if (data.data) {
-      for (const p of data.data) {
-        const pageUrl = p.metadata?.sourceURL || p.metadata?.url || '';
-        if (pageUrl && !seen.has(pageUrl)) {
-          seen.add(pageUrl);
-          pages.push({ url: pageUrl, markdown: p.markdown || '', html: p.rawHtml || '' });
-        }
-      }
-    }
-
-    const completed = data.completed || pages.length;
-    const total = data.total || completed || 1;
-    setProgress(completed, total, `crawling \u00b7 ${completed}/${total} pages \u00b7 ${data.status}`);
-
-    if (data.status === 'completed') {
-      if (data.next) { url = data.next; continue; }
-      return pages;
-    }
-    if (data.status === 'failed') throw new Error('Crawl failed on server');
-
-    await sleep(4000);
-  }
-
-  log('crawl timed out after 8 minutes', 'warn');
-  return pages;
-}
-
-// ─── KEYWORD DETECTION ─────────────────────────────────────────
-
-function detectKeywords(markdown) {
-  const text = markdown.toLowerCase();
-  const allHits = [];
-
-  for (const [group, keywords] of Object.entries(SIGNALS)) {
-    for (const kw of keywords) {
-      if (text.includes(kw)) {
-        allHits.push({ group, keyword: kw });
-      }
-    }
-  }
-
-  for (const kw of aiPluginKeywords) {
-    if (text.includes(kw.toLowerCase())) {
-      allHits.push({ group: 'ai_plugin', keyword: kw });
-    }
-  }
-
-  if (allHits.length < 1) return null;
-
-  const groupCounts = {};
-  for (const h of allHits) {
-    groupCounts[h.group] = (groupCounts[h.group] || 0) + 1;
-  }
-  const topGroup = Object.entries(groupCounts).sort((a, b) => b[1] - a[1])[0];
-  const confidence = allHits.length >= 6 ? 'high' : allHits.length >= 3 ? 'medium' : 'low';
-
-  return {
-    form_type: topGroup[0],
-    confidence,
-    evidence: 'matched: ' + allHits.slice(0, 5).map(h => h.keyword).join(', '),
-    hitCount: allHits.length
-  };
-}
-
-// ─── AI CLASSIFICATION ─────────────────────────────────────────
-
-async function aiClassifyPage(pageUrl, markdown, plugin) {
-  const prompt = `Spammer exploits "${plugin || 'unknown'}" plugin. Keywords: ${aiPluginKeywords.join(', ')}
-
-Page: ${pageUrl}
-Content:
-${markdown.substring(0, 3000)}
-
-Does this page contain an active exploitable form? This includes:
-file upload, registration, event submission, contact form, guest post submission,
-directory/business listing, review/testimonial, job application, petition/signature,
-wiki/page editor, complaint/report form, suggestion/feedback, survey/poll/quiz,
-donation/volunteer signup, membership enrollment, vendor/supplier registration,
-support ticket, scholarship/grant application, newsletter subscription,
-forum post/thread creation, government/municipal form, patient/medical intake,
-property listing, quote request, or any other user-input form.
-Return ONLY JSON: {"is_exploit":true|false,"form_type":"file_upload|event_submission|registration|contact|job_application|directory_listing|review|petition|wiki_editor|complaint|feedback|survey|donation|membership|vendor_registration|support_ticket|scholarship|newsletter|forum_post|government_form|medical_intake|property_listing|quote_request|other|none","confidence":"high|medium|low","evidence":"one sentence"}`;
-
-  const text = await callAI(null, prompt, 200);
-  return parseAIJSON(text);
-}
-
-// ─── RESULT CARDS ───────────────────────────────────────────────
-
-function addExploitCard(url, verdict, source) {
-  exploitCount++;
-  $('eCount').textContent = `(${exploitCount} found)`;
-  $('liveBadge').textContent = `${exploitCount} exploit page${exploitCount !== 1 ? 's' : ''} found`;
-
-  const list = $('eList');
-  const card = document.createElement('div');
-  card.className = 'rc exploit';
-
-  const confClass = verdict.confidence === 'high' ? 'b-high'
-    : verdict.confidence === 'medium' ? 'b-med' : 'b-low';
-  const srcBadge = source === 'ai'
-    ? '<span class="badge b-green">AI verified</span>'
-    : source === 'path'
-    ? '<span class="badge b-info">URL path match</span>'
-    : '<span class="badge b-low">keyword match</span>';
-  const formType = (verdict.form_type || 'unknown').replace(/_/g, ' ');
-
-  card.innerHTML = `
-    <div class="rc-url"><a href="${esc(url)}" target="_blank">${esc(url)} \u2197</a></div>
-    <div class="rc-badges">
-      <span class="badge b-pink">${esc(formType)}</span>
-      <span class="badge ${confClass}">${verdict.confidence}</span>
-      ${srcBadge}
-    </div>
-    <div class="rc-desc">${esc(verdict.evidence)}</div>`;
-
-  list.appendChild(card);
-  return card;
-}
-
-
-// ─── ESTIMATE PAGES (SITEMAP RECON) ─────────────────────────────
-
-async function estimatePages() {
-  const rawUrl = $('urlInput').value.trim();
-  const origin = extractOrigin(rawUrl);
-  if (!origin) { alert('Enter a valid URL first.'); return; }
-
-  $('estimateBtn').disabled = true;
-  $('estimateBtn').textContent = 'Checking...';
-  show('logSection');
-  log(`estimating page count for ${origin}...`, 'info');
-
-  const sitemapPaths = ['/wp-sitemap.xml', '/sitemap.xml', '/sitemap_index.xml'];
-  let totalUrls = 0;
-  let foundSitemap = null;
-
-  for (const path of sitemapPaths) {
-    const target = origin + path;
-    try {
-      const res = await fetch('/proxy?url=' + encodeURIComponent(target));
-      if (!res.ok) continue;
-      const text = await res.text();
-      if (!text.includes('<loc>') && !text.includes('<sitemap>')) continue;
-
-      foundSitemap = path;
-
-      // Check if this is a sitemap index (contains <sitemap> entries)
-      const isSitemapIndex = text.includes('<sitemap>');
-
-      if (isSitemapIndex) {
-        // Extract sub-sitemap URLs
-        const subUrls = [];
-        const re = /<loc>\s*(.*?)\s*<\/loc>/gi;
-        let m;
-        while ((m = re.exec(text)) !== null) {
-          subUrls.push(m[1]);
-        }
-        log(`sitemap index: ${subUrls.length} sub-sitemaps`, 'info');
-
-        // Fetch each sub-sitemap and count <loc> entries
-        for (const subUrl of subUrls) {
-          try {
-            const subRes = await fetch('/proxy?url=' + encodeURIComponent(subUrl));
-            if (!subRes.ok) continue;
-            const subText = await subRes.text();
-            const locMatches = subText.match(/<loc>/gi);
-            if (locMatches) totalUrls += locMatches.length;
-          } catch (e) {
-            log(`failed to fetch sub-sitemap: ${subUrl}`, 'warn');
-          }
-        }
-      } else {
-        // Regular sitemap — count <loc> entries directly
-        const locMatches = text.match(/<loc>/gi);
-        if (locMatches) totalUrls = locMatches.length;
-      }
-
-      break; // Found a working sitemap, stop trying others
-    } catch (e) {
-      continue;
-    }
-  }
-
-  if (foundSitemap) {
-    log(`~${totalUrls} pages found via sitemap (${foundSitemap})`, 'ok');
-    log(`proxy crawl limit: 100 pages max (free)`, 'ok');
-  } else {
-    log('no sitemap found — proxy crawl will use 100 page limit', 'warn');
-  }
-
-  $('estimateBtn').disabled = false;
-  $('estimateBtn').textContent = 'Estimate Pages';
-}
-
-// ─── SCAN ORCHESTRATION ─────────────────────────────────────────
-
-async function runScan() {
-  const spammerUrl = $('urlInput').value.trim();
-  const aiKey = $('aiKey').value.trim();
-
-  if (!spammerUrl) { alert('Enter the spammer URL from the Google abuse email.'); return; }
-
-  const siteRoot = extractOrigin(spammerUrl);
-  const host = extractHost(spammerUrl);
-  if (!siteRoot || !host) { alert('Invalid URL. Include https://'); return; }
-
-  // Reset state
-  scanState = 'scanning';
-  exploitCount = 0;
-  aiPluginKeywords = [];
-  cachedCrawlPages = [];
-  cachedPlugin = null;
-  hide('reAnalyzeBtn');
-
-  // Reset UI
-  $('scanBtn').disabled = true;
-  $('scanBtn').textContent = 'Scanning...';
-  show('pauseBtn'); show('stopBtn'); show('liveBadge');
-  $('liveBadge').textContent = 'scanning...';
-  $('liveBadge').classList.add('active');
-  $('pauseBtn').textContent = '\u23F8 Pause';
-  $('logBox').innerHTML = '';
-  $('eList').innerHTML = '';
-  $('eCount').textContent = '';
-  show('logSection'); show('exploitSection');
-  hide('pWrap');
-
-  log('target: ' + siteRoot, 'info');
-  log('spammer url: ' + spammerUrl, 'info');
-
-  // ── URL path analysis (always runs) ──
-  const urlClues = parseSpammerUrl(spammerUrl);
-  if (urlClues.cms || urlClues.formName || urlClues.searchTerms.length) {
-    log(`url path \u2192 cms: ${urlClues.cms || '?'} \u00b7 form: ${urlClues.formName || urlClues.formModule || '?'} \u00b7 type: ${urlClues.exploitType || '?'}`, 'ok');
-    if (urlClues.searchTerms.length) log(`search terms from url: ${urlClues.searchTerms.join(', ')}`, 'ok');
-    if (urlClues.probePaths.length) log(`will probe: ${urlClues.probePaths.join(', ')}`, 'info');
-  }
-
-  try {
-    // ── Step 1b: Homepage CMS detection via meta generator (FREE) ──
-    if (!urlClues.cms) {
-      try {
-        const homePage = await proxyFetch(siteRoot + '/');
-        if (homePage.ok) {
-          const metaDoc = new DOMParser().parseFromString(homePage.html, 'text/html');
-          const gen = metaDoc.querySelector('meta[name="generator"]')?.getAttribute('content')?.toLowerCase() || '';
-          if (gen.includes('wordpress')) { urlClues.cms = 'wordpress'; log('meta generator → WordPress detected', 'ok'); }
-          else if (gen.includes('drupal')) { urlClues.cms = 'drupal'; log('meta generator → Drupal detected', 'ok'); }
-          else if (gen.includes('joomla')) { urlClues.cms = 'joomla'; log('meta generator → Joomla detected', 'ok'); }
-          else if (gen) { log(`meta generator: ${gen}`, 'info'); }
-        }
-      } catch (e) { log('homepage CMS check failed: ' + e.message, 'warn'); }
-    }
-
-    // ── Step 1: AI analysis (optional) ──
-    let plugin = null;
-    let hasAI = false;
-
-    const selectedModel = $('modelSelect').value;
-    const hasAIKey = isOpenAIModel(selectedModel) ? !!$('oaiKey').value.trim() : !!aiKey;
-
-    if (hasAIKey) {
-      log('ai analyzing spammer url...', 'info');
-      try {
-        const text = await callAI(null,
-          `Spammer URL: ${spammerUrl}\nURL structure clues: CMS=${urlClues.cms||'unknown'}, module=${urlClues.formModule||'unknown'}, form_name=${urlClues.formName||'unknown'}, type=${urlClues.exploitType||'unknown'}\nAnalyze the URL path structure and return ONLY JSON: {"cms":"wordpress|joomla|drupal|generic","plugin":"module or plugin name or null","vulnerability_type":"file_upload|registration|contact_form|other","plugin_keywords":["3-5 words that would appear on the exploit page"],"likely_paths":["2-4 URL paths where the vulnerable form page might live, e.g. /contact, /signal"]}`,
-          400
-        );
-        const parsed = parseAIJSON(text);
-        if (parsed) {
-          plugin = parsed.plugin;
-          aiPluginKeywords = parsed.plugin_keywords || [];
-          hasAI = true;
-          log(`cms: ${parsed.cms} \u00b7 plugin: ${plugin || 'unknown'} \u00b7 type: ${parsed.vulnerability_type || '?'}`, 'ok');
-          log(`ai keywords: ${aiPluginKeywords.join(', ')}`, 'ok');
-          // Add AI-suggested paths to probe list
-          if (parsed.likely_paths) {
-            for (const p of parsed.likely_paths) {
-              const clean = p.startsWith('/') ? p : '/' + p;
-              if (!urlClues.probePaths.includes(clean)) urlClues.probePaths.push(clean);
-            }
-            log(`ai suggested paths: ${parsed.likely_paths.join(', ')}`, 'ok');
-          }
-        }
-      } catch (e) {
-        log('ai analysis failed: ' + e.message, 'warn');
-        log('continuing with url path + keyword detection', 'warn');
-      }
-    } else {
-      log('no AI key \u2014 url path + keyword detection mode', 'warn');
-    }
-
-    // Merge URL search terms into keyword detection
-    for (const term of urlClues.searchTerms) {
-      if (!aiPluginKeywords.includes(term)) aiPluginKeywords.push(term);
-    }
-
-    // ── Plugin-specific keyword banks (replaces AI keywords when no AI) ──
-    const PLUGIN_KEYWORDS = {
-      'ninja-forms': ['your name', 'your email', 'your message', 'submit', 'upload file',
-        'attach', 'file upload', 'choose file', 'send message', 'contact', 'contact us',
-        'nf-form', 'ninja-forms', 'nf-field', 'send'],
-      'contact-form-7': ['your name', 'your email', 'your subject', 'your message',
-        'wpcf7', 'contact form', 'send message', 'submit', 'contact us', 'attach',
-        'file upload', 'choose file'],
-      'wpforms': ['your name', 'your email', 'submit', 'wpforms', 'contact',
-        'send message', 'file upload', 'upload file', 'choose file', 'attach'],
-      'gravity-forms': ['your name', 'your email', 'submit', 'gform', 'gravity',
-        'contact', 'send message', 'file upload', 'upload file', 'choose file'],
-      'formidable': ['your name', 'your email', 'submit', 'formidable', 'frm_forms',
-        'contact', 'send message', 'file upload', 'choose file'],
-      'forminator': ['your name', 'your email', 'submit', 'forminator', 'contact',
-        'send message', 'file upload', 'choose file'],
-      'elementor': ['your name', 'your email', 'submit', 'elementor-form', 'contact',
-        'send message', 'file upload'],
-      'fluent-forms': ['your name', 'your email', 'submit', 'fluent-form', 'fluentform',
-        'contact', 'send message', 'file upload'],
-      'wp-event-manager': ['event title', 'event description', 'event date', 'submit event',
-        'post event', 'event category', 'organizer', 'venue', 'event location', 'event banner',
-        'wpem', 'wp-event-manager', 'upload', 'file upload'],
-      'caldera': ['your name', 'your email', 'submit', 'caldera-form', 'contact',
-        'send message', 'file upload'],
-      'everest-forms': ['your name', 'your email', 'submit', 'everest-forms', 'contact',
-        'send message', 'file upload'],
-      'ws-form': ['your name', 'your email', 'submit', 'ws-form', 'wsf-', 'contact',
-        'send message', 'file upload']
-    };
-
-    const EXPLOIT_KEYWORDS = {
-      'file_upload': ['upload', 'file upload', 'choose file', 'select file', 'browse',
-        'attach', 'attachment', 'drag and drop', 'supported format', 'maximum file size',
-        'mb allowed', 'pdf', 'doc', 'image', 'upload document', 'submit'],
-    };
-
-    const SITE_TYPE_KEYWORDS = {
-      event: ['event', 'submit event', 'post event', 'event title', 'event date',
-        'event description', 'organizer', 'venue', 'rsvp', 'booking', 'registration',
-        'event category', 'event location', 'event cost', 'add to calendar',
-        'event banner', 'event image', 'submit listing', 'post a listing'],
-      fundraiser: ['donate', 'donation', 'fundraiser', 'give now', 'support us',
-        'contribute', 'sponsor', 'volunteer', 'make a donation', 'give',
-        'tax deductible', 'nonprofit', 'charity', 'cause', 'campaign'],
-      directory: ['add business', 'submit listing', 'business directory', 'add listing',
-        'list your business', 'directory submission', 'business listing', 'free listing',
-        'post ad', 'classified', 'add your business'],
-      career: ['career', 'careers', 'job', 'jobs', 'apply now', 'job application',
-        'resume', 'cv', 'cover letter', 'join our team', 'open position',
-        'we are hiring', 'upload resume', 'submit application'],
-      membership: ['membership', 'member', 'join', 'enroll', 'sign up', 'register',
-        'become a member', 'membership form', 'join now', 'join us'],
-    };
-
-    // Inject plugin keywords
-    if (urlClues.formModule && PLUGIN_KEYWORDS[urlClues.formModule]) {
-      for (const kw of PLUGIN_KEYWORDS[urlClues.formModule]) {
-        if (!aiPluginKeywords.includes(kw)) aiPluginKeywords.push(kw);
-      }
-      log(`plugin keywords (${urlClues.formModule}): ${PLUGIN_KEYWORDS[urlClues.formModule].length} loaded`, 'ok');
-    }
-
-    // Inject exploit-type keywords
-    if (urlClues.exploitType && EXPLOIT_KEYWORDS[urlClues.exploitType]) {
-      for (const kw of EXPLOIT_KEYWORDS[urlClues.exploitType]) {
-        if (!aiPluginKeywords.includes(kw)) aiPluginKeywords.push(kw);
-      }
-    }
-
-    // Detect site type from URL path and inject keywords
-    for (const [siteType, kws] of Object.entries(SITE_TYPE_KEYWORDS)) {
-      const pathLower = new URL(spammerUrl).pathname.toLowerCase();
-      if (pathLower.includes(siteType) || urlClues.searchTerms.some(t => t.includes(siteType))) {
-        for (const kw of kws) {
-          if (!aiPluginKeywords.includes(kw)) aiPluginKeywords.push(kw);
-        }
-      }
-    }
-
-    if (scanState === 'stopped') throw 'STOPPED';
-
-    // ── Step 2: REST API page discovery (FREE — no Firecrawl credits) ──
-    const apiFormPages = [];
-    if (urlClues.cms === 'wordpress' || plugin) {
-      log('enumerating all pages via WordPress REST API...', 'info');
-      try {
-        const apiUrl = siteRoot + '/wp-json/wp/v2/pages?per_page=100&_fields=id,slug,title,link,content';
-        const res = await fetch('/proxy?url=' + encodeURIComponent(apiUrl));
-        if (res.ok) {
-          const text = await res.text();
-          try {
-            const apiPages = JSON.parse(text);
-            if (Array.isArray(apiPages)) {
-              log(`REST API: ${apiPages.length} published pages found`, 'ok');
-              for (const p of apiPages) {
-                const html = p.content?.rendered || '';
-                const title = p.title?.rendered || '';
-                const link = p.link || '';
-                const slug = p.slug || '';
-                const formCheck = detectFormsInHtml(html);
-                if (formCheck?.hasSubstantialForm || formCheck?.hasFileInput) {
-                  apiFormPages.push({ url: link, slug, title });
-                  log(`REST API form page: /${slug} \u2192 "${title}"`, 'ok');
-                }
-              }
-              const formSlugs = /^(submit|post-a|add-|create-|upload|register|sign-up|apply|contact|feedback|report|listing|ticket|enrollment|donate|volunteer|career|job|event-submit|booking|petition|directory|review|complaint|support|wiki|forum)/i;
-              for (const p of apiPages) {
-                const slug = p.slug || '';
-                const link = p.link || '';
-                if (formSlugs.test(slug) && !apiFormPages.some(f => f.url === link)) {
-                  apiFormPages.push({ url: link, slug, title: p.title?.rendered || '' });
-                  log(`REST API form-slug: /${slug} \u2192 "${p.title?.rendered || ''}"`, 'info');
-                }
-              }
-              if (apiFormPages.length === 0) log('REST API: no form pages detected in content', 'info');
-            }
-          } catch { log('REST API: response was not valid JSON', 'warn'); }
-        } else {
-          log('REST API: not available (HTTP ' + res.status + ')', 'warn');
-        }
-      } catch (e) {
-        log('REST API: enumeration failed \u2014 ' + e.message, 'warn');
-      }
-    }
-
-    if (scanState === 'stopped') throw 'STOPPED';
-
-    // ── Step 3: Sitemap cross-reference (FREE) ──
-    const missedFormPages = [];
-    try {
-      const smPaths = ['/wp-sitemap.xml', '/sitemap.xml', '/sitemap_index.xml'];
-      let sitemapUrls = [];
-      for (const smPath of smPaths) {
-        const res = await fetch('/proxy?url=' + encodeURIComponent(siteRoot + smPath));
-        if (!res.ok) continue;
-        const text = await res.text();
-        if (!text.includes('<loc>')) continue;
-        if (text.includes('<sitemap>')) {
-          const subUrls = [...text.matchAll(/<loc>\s*(.*?)\s*<\/loc>/gi)].map(m => m[1]);
-          for (const subUrl of subUrls) {
-            try {
-              const subRes = await fetch('/proxy?url=' + encodeURIComponent(subUrl));
-              if (!subRes.ok) continue;
-              const subText = await subRes.text();
-              const locs = [...subText.matchAll(/<loc>\s*(.*?)\s*<\/loc>/gi)].map(m => m[1]);
-              sitemapUrls.push(...locs);
-            } catch {}
-          }
-        } else {
-          sitemapUrls = [...text.matchAll(/<loc>\s*(.*?)\s*<\/loc>/gi)].map(m => m[1]);
-        }
-        break;
-      }
-      if (sitemapUrls.length > 0) {
-        const formSlugPattern = /\/(submit|post-a|add-|create|upload|register|sign-up|apply|contact|feedback|report|listing|ticket|event|form|booking|survey|donate|volunteer|career|job|petition|directory|review|complaint|support|wiki|forum)/i;
-        for (const url of sitemapUrls) {
-          if (formSlugPattern.test(url)) {
-            missedFormPages.push(url);
-          }
-        }
-        if (missedFormPages.length > 0) {
-          log(`sitemap: ${missedFormPages.length} form-candidate URLs found`, 'info');
-        }
-      }
-    } catch {}
-
-    if (scanState === 'stopped') throw 'STOPPED';
-
-    // ── Step 3b: robots.txt recon (FREE) ──
-    try {
-      const robotsPage = await proxyFetch(siteRoot + '/robots.txt');
-      if (robotsPage.ok && robotsPage.status < 400) {
-        const formPathRe = /\/(contact|form|upload|register|submit|apply|feedback|event|listing|survey|donate|career|job|petition|directory|review|complaint|support|wiki|forum|booking|ticket|volunteer|membership|signup|sign-up)/i;
-        const lines = robotsPage.html.split('\n');
-        let robotsPaths = 0;
-        for (const line of lines) {
-          const m = line.match(/^(?:Dis)?allow:\s*(\S+)/i);
-          if (m && m[1] !== '/' && formPathRe.test(m[1])) {
-            const rPath = m[1].replace(/\*.*$/, '').replace(/\$$/, '');
-            if (rPath && !urlClues.probePaths.includes(rPath)) {
-              urlClues.probePaths.push(rPath);
-              robotsPaths++;
-            }
-          }
-        }
-        if (robotsPaths > 0) log(`robots.txt: ${robotsPaths} form-related paths found`, 'info');
-      }
-    } catch {}
-
-    // ── Step 3c: Common CMS form paths (FREE) ──
-    {
-      const cmsPaths = {
-        wordpress: ['/contact', '/contact-us', '/register', '/submit-event', '/submit-listing', '/add-listing',
-          '/my-account', '/membership', '/donate', '/volunteer', '/apply', '/career', '/careers', '/jobs',
-          '/booking', '/book-now', '/support', '/ticket', '/feedback', '/survey', '/directory', '/forum',
-          '/write-for-us', '/guest-post', '/submit-article'],
-        drupal: ['/contact', '/user/register', '/node/add', '/webform', '/feedback', '/apply', '/support'],
-        joomla: ['/contact', '/component/users/?view=registration', '/submit-article', '/submit-listing'],
-        generic: ['/contact', '/contact-us', '/register', '/signup', '/sign-up', '/apply', '/submit',
-          '/feedback', '/support', '/upload', '/booking', '/donate', '/volunteer', '/career', '/careers']
-      };
-      const cms = urlClues.cms || 'generic';
-      const paths = cmsPaths[cms] || cmsPaths.generic;
-      let added = 0;
-      for (const p of paths) {
-        if (!urlClues.probePaths.includes(p)) { urlClues.probePaths.push(p); added++; }
-      }
-      if (added > 0) log(`CMS paths (${cms}): ${added} common form paths added`, 'info');
-    }
-
-    // ── Step 3d: RSS/Atom feed discovery (FREE) ──
-    {
-      const feedPaths = ['/feed', '/rss', '/rss.xml', '/atom.xml', '/feed/rss', '/feed/atom'];
-      const formPathRe = /\/(contact|form|upload|register|submit|apply|feedback|event|listing|survey|donate|career|job|petition|directory|review|complaint|support|wiki|forum|booking|ticket|volunteer|membership|signup)/i;
-      let feedUrls = 0;
-      for (const fp of feedPaths) {
-        try {
-          const feedPage = await proxyFetch(siteRoot + fp);
-          if (!feedPage.ok || feedPage.status >= 400) continue;
-          const links = [...feedPage.html.matchAll(/<link>\s*(.*?)\s*<\/link>/gi)].map(m => m[1]);
-          for (const link of links) {
-            if (formPathRe.test(link)) {
-              try {
-                const path = new URL(link).pathname;
-                if (!urlClues.probePaths.includes(path)) { urlClues.probePaths.push(path); feedUrls++; }
-              } catch {}
-            }
-          }
-          if (links.length > 0) break; // found a working feed
-        } catch {}
-      }
-      if (feedUrls > 0) log(`RSS/Atom: ${feedUrls} form-related URLs from feeds`, 'info');
-    }
-
-    if (scanState === 'stopped') throw 'STOPPED';
-
-    // ── Step 4: Merge discovered pages into probe list (priority) ──
-    const discoveredUrls = [
-      ...apiFormPages.map(p => p.url),
-      ...missedFormPages
-    ];
-    for (const dUrl of discoveredUrls) {
-      try {
-        const path = new URL(dUrl).pathname;
-        if (!urlClues.probePaths.includes(path)) {
-          urlClues.probePaths.unshift(path); // prepend = probe first
-        }
-      } catch {}
-    }
-
-    // ── Step 5: Probe deduced form paths (FREE — via proxy) ──
-    const pages = [];
-    if (urlClues.probePaths.length > 0) {
-      log(`probing ${urlClues.probePaths.length} deduced form paths via proxy...`, 'info');
-      const seenUrls = new Set();
-      for (const probePath of urlClues.probePaths) {
-        if (scanState === 'stopped') break;
-        while (scanState === 'paused') await sleep(400);
-        const probeUrl = siteRoot + probePath;
-        try {
-          const page = await proxyFetch(probeUrl);
-          if (!page.ok) {
-            log(`probe: ${probePath} → proxy error, skipped`, 'warn');
-            continue;
-          }
-          // Real 404 detection via status code
-          if (page.status === 404 || page.status === 410) {
-            log(`probe: ${probePath} → ${page.status}, skipped`, 'info');
-            continue;
-          }
-          // Soft-404: redirected back to homepage
-          const homeNorm = siteRoot.replace(/\/+$/, '');
-          const pageNorm = page.url.replace(/\/+$/, '');
-          if (pageNorm === homeNorm && probePath !== '/') {
-            log(`probe: ${probePath} → redirected to homepage, skipped`, 'info');
-            continue;
-          }
-          // Content-based 404 heuristic
-          const snippet = page.text.substring(0, 500);
-          if (/\b(page\s*not\s*found|404\b|nothing\s*(was\s*)?found|does\s*n.t\s*exist|no\s*results)/i.test(snippet)) {
-            log(`probe: ${probePath} → soft 404, skipped`, 'info');
-            continue;
-          }
-          const srcUrl = page.url || probeUrl;
-          if (!seenUrls.has(srcUrl)) {
-            seenUrls.add(srcUrl);
-            pages.push({ url: srcUrl, markdown: page.text, html: page.html, probed: true });
-            log(`probe hit: ${probePath} → page found`, 'ok');
-          } else {
-            log(`probe: ${probePath} → duplicate, skipped`, 'info');
-          }
-        } catch (e) {
-          log(`probe: ${probePath} → failed`, 'warn');
-        }
-        await sleep(200);
-      }
-    }
-
-    if (scanState === 'stopped') throw 'STOPPED';
-
-    // ── Scan helper (reused for probed pages and crawled pages) ──
-    async function scanPageBatch(batch, startOffset) {
-      const total = startOffset + batch.length;
-      for (let i = 0; i < batch.length; i++) {
-        if (scanState === 'stopped') throw 'STOPPED';
-        while (scanState === 'paused') await sleep(400);
-
-        const page = batch[i];
-        const hasContent = page.markdown && page.markdown.trim().length >= 30;
-        if (!hasContent && !page.html) continue;
-
-        const idx = startOffset + i + 1;
-        const shortUrl = page.url.split('/').pop()?.substring(0, 40) || page.url;
-        setProgress(idx, total, `checking ${idx}/${total} \u00b7 ${shortUrl}`);
-
-        const kwResult = hasContent ? detectKeywords(page.markdown) : null;
-        const pathResult = scorePageByPath(page.url, urlClues);
-        const htmlForms = page.html ? detectFormsInHtml(page.html) : null;
-        const mdForms = hasContent ? detectFormsInMarkdown(page.markdown) : null;
-
-        const pathMatch = pathResult.score >= 5;
-        const htmlMatch = htmlForms && htmlForms.hasForm;
-        const mdMatch = mdForms && mdForms.hasFormIndicators;
-        if (!kwResult && !pathMatch && !htmlMatch && !mdMatch) continue;
-
-        const pathEvidence = pathMatch ? `url path match: ${pathResult.matches.join(', ')}` : '';
-        const htmlEvidence = htmlForms?.hasFileInput ? ' + file upload input in HTML' : '';
-        const mdEvidence = mdMatch ? ` + markdown: ${mdForms.indicators.join(', ')}` : '';
-        const formVerified = htmlForms?.hasSubstantialForm || (mdMatch && mdForms.indicators.length >= 2);
-        // Detect form plugin traces in raw HTML (JS-rendered forms leave container divs, CSS/JS refs)
-        const hasPluginTrace = urlClues.formModule && page.html &&
-          new RegExp(urlClues.formModule.replace(/-/g, '[\\-_\\s]?'), 'i').test(page.html);
-
-        if (pathMatch) log(`path match \u00b7 ${page.url} (${pathResult.matches.join(', ')})`, 'info');
-
-        if (hasAI) {
-          try {
-            const aiResult = await aiClassifyPage(page.url, page.markdown || '', plugin);
-            if (aiResult?.is_exploit) {
-              const conf = (pathResult.score >= 10 && aiResult.confidence !== 'high') ? 'high' : aiResult.confidence;
-              log(`FOUND \u00b7 ${page.url}`, 'ok');
-              addExploitCard(page.url, {
-                form_type: aiResult.form_type,
-                confidence: conf,
-                evidence: aiResult.evidence + (pathMatch ? ' \u00b7 ' + pathEvidence : '') + mdEvidence
-              }, 'ai');
-            } else if (pathResult.score >= 10 && formVerified) {
-              log(`FOUND (path+form) \u00b7 ${page.url}`, 'ok');
-              addExploitCard(page.url, {
-                form_type: urlClues.exploitType || 'form',
-                confidence: 'medium',
-                evidence: pathEvidence + htmlEvidence + mdEvidence
-              }, 'path');
-            } else if (urlClues.exploitType === 'file_upload' && htmlForms?.hasFileInput) {
-              log(`FOUND (file upload match) \u00b7 ${page.url}`, 'ok');
-              addExploitCard(page.url, {
-                form_type: 'file_upload',
-                confidence: 'high',
-                evidence: 'File upload input matches file_upload exploit type' + htmlEvidence + mdEvidence
-              }, 'path');
-            } else if (pathMatch && (formVerified || hasPluginTrace)) {
-              log(`FOUND (plugin+path) \u00b7 ${page.url}`, 'ok');
-              addExploitCard(page.url, {
-                form_type: urlClues.exploitType || 'form',
-                confidence: formVerified ? 'medium' : 'low',
-                evidence: (urlClues.formModule || 'form') + ' indicators at form path' + htmlEvidence + mdEvidence
-              }, 'path');
-            } else if (urlClues.formModule && pathMatch) {
-              log(`FOUND (known plugin + form path) \u00b7 ${page.url}`, 'ok');
-              addExploitCard(page.url, {
-                form_type: urlClues.exploitType || 'form',
-                confidence: 'low',
-                evidence: `${urlClues.formModule} site, form path: ${pathResult.matches.join(', ')}` + mdEvidence
-              }, 'path');
-            }
-          } catch {
-            if (pathResult.score >= 10 && formVerified) {
-              log(`FOUND (path+form) \u00b7 ${page.url}`, 'ok');
-              addExploitCard(page.url, {
-                form_type: urlClues.exploitType || 'form',
-                confidence: 'medium',
-                evidence: pathEvidence + htmlEvidence + mdEvidence
-              }, 'path');
-            } else if (urlClues.exploitType === 'file_upload' && htmlForms?.hasFileInput) {
-              log(`FOUND (file upload match) \u00b7 ${page.url}`, 'ok');
-              addExploitCard(page.url, {
-                form_type: 'file_upload',
-                confidence: 'high',
-                evidence: 'File upload input matches file_upload exploit type' + htmlEvidence + mdEvidence
-              }, 'path');
-            } else if (kwResult && formVerified) {
-              log(`FOUND \u00b7 ${page.url}`, 'ok');
-              addExploitCard(page.url, { ...kwResult, evidence: (kwResult.evidence || '') + mdEvidence }, 'kw');
-            } else if (pathMatch && (formVerified || hasPluginTrace)) {
-              log(`FOUND (plugin+path) \u00b7 ${page.url}`, 'ok');
-              addExploitCard(page.url, {
-                form_type: urlClues.exploitType || 'form',
-                confidence: formVerified ? 'medium' : 'low',
-                evidence: (urlClues.formModule || 'form') + ' indicators at form path' + htmlEvidence + mdEvidence
-              }, 'path');
-            } else if (urlClues.formModule && pathMatch) {
-              log(`FOUND (known plugin + form path) \u00b7 ${page.url}`, 'ok');
-              addExploitCard(page.url, {
-                form_type: urlClues.exploitType || 'form',
-                confidence: 'low',
-                evidence: `${urlClues.formModule} site, form path: ${pathResult.matches.join(', ')}` + mdEvidence
-              }, 'path');
-            } else if (kwResult) {
-              log(`suspicious (no form verified) \u00b7 ${page.url}`, 'warn');
-            }
-          }
-        } else {
-          cachedCrawlPages.push({ url: page.url, markdown: page.markdown || '' });
-          if (pathResult.score >= 10 && formVerified) {
-            log(`FOUND (path+form) \u00b7 ${page.url}`, 'ok');
-            addExploitCard(page.url, {
-              form_type: urlClues.exploitType || 'form',
-              confidence: htmlForms?.hasFileInput ? 'high' : 'medium',
-              evidence: pathEvidence + htmlEvidence + mdEvidence
-            }, 'path');
-          } else if (urlClues.exploitType === 'file_upload' && htmlForms?.hasFileInput) {
-            log(`FOUND (file upload match) \u00b7 ${page.url}`, 'ok');
-            addExploitCard(page.url, {
-              form_type: 'file_upload',
-              confidence: 'high',
-              evidence: 'File upload input matches file_upload exploit type' + htmlEvidence + mdEvidence
-            }, 'path');
-          } else if (kwResult && formVerified) {
-            log(`FOUND \u00b7 ${page.url}`, 'ok');
-            addExploitCard(page.url, { ...kwResult, evidence: (kwResult.evidence || '') + mdEvidence }, 'kw');
-          } else if (pathMatch && (formVerified || hasPluginTrace)) {
-            log(`FOUND (plugin+path) \u00b7 ${page.url}`, 'ok');
-            addExploitCard(page.url, {
-              form_type: urlClues.exploitType || 'form',
-              confidence: formVerified ? 'medium' : 'low',
-              evidence: (urlClues.formModule || 'form') + ' indicators at form path' + htmlEvidence + mdEvidence
-            }, 'path');
-          } else if (urlClues.formModule && pathMatch) {
-            log(`FOUND (known plugin + form path) \u00b7 ${page.url}`, 'ok');
-            addExploitCard(page.url, {
-              form_type: urlClues.exploitType || 'form',
-              confidence: 'low',
-              evidence: `${urlClues.formModule} site, form path: ${pathResult.matches.join(', ')}` + mdEvidence
-            }, 'path');
-          } else if (pathResult.score >= 10 || kwResult) {
-            log(`suspicious (no form verified) \u00b7 ${page.url}`, 'warn');
-          }
-        }
-
-        if (i % 5 === 4) await sleep(hasAI ? 100 : 10);
-      }
-    }
-
-    // ── Step 6: Scan probed pages for exploits ──
-    if (pages.length > 0) {
-      log(`scanning ${pages.length} probed pages for exploit forms...`, 'info');
-      await scanPageBatch(pages, 0);
-    }
-
-    // ── Step 7: Early exit or fall back to proxy-based link crawl (FREE) ──
-    if (exploitCount > 0) {
-      log(`found ${exploitCount} exploit page(s) via targeted probing — skipping full crawl`, 'ok');
-    } else {
-      log('no exploits found via probing — starting proxy link crawl (free)...', 'info');
-      show('pWrap');
-      const crawledPages = await proxyCrawl(siteRoot, 100);
-      log(`crawl complete · ${crawledPages.length} pages`, 'ok');
-
-      if (scanState === 'stopped') throw 'STOPPED';
-
-      // Add crawled pages that weren't already probed
-      const probedUrls = new Set(pages.map(p => p.url));
-      const newPages = [];
-      for (const cp of crawledPages) {
-        if (!probedUrls.has(cp.url)) newPages.push(cp);
-      }
-
-      if (newPages.length > 0) {
-        log(`scanning ${newPages.length} crawled pages for exploit forms...`, 'info');
-        await scanPageBatch(newPages, pages.length);
-      }
-    }
-
-    if (scanState === 'stopped') throw 'STOPPED';
-
-    if (exploitCount === 0) {
-      $('eList').innerHTML = '<div class="empty">no exploit pages detected</div>';
-    }
-
-    log(`scan complete \u00b7 ${exploitCount} exploit page${exploitCount !== 1 ? 's' : ''} found`, 'ok');
-
-  } catch (e) {
-    if (e === 'STOPPED') {
-      log('scan stopped by user', 'warn');
-    } else {
-      log('FATAL: ' + (e.message || e), 'err');
-    }
-  }
-
-  scanState = 'idle';
-  $('liveBadge').textContent = `${exploitCount} exploit page${exploitCount !== 1 ? 's' : ''} found`;
-  $('liveBadge').classList.remove('active');
-  hide('pauseBtn'); hide('stopBtn');
-  $('scanBtn').disabled = false;
-  $('scanBtn').textContent = 'Run Scan \u2192';
-  aiPluginKeywords = [];
-
-  if (cachedCrawlPages.length > 0) {
-    $('reAnalyzeBtn').classList.remove('hidden');
-    $('reAnalyzeBtn').textContent = `Verify ${cachedCrawlPages.length} pages with AI \u2192`;
-  }
-}
-
-// ─── RE-ANALYZE WITH AI ─────────────────────────────────────────
-
-async function reAnalyzeWithAI() {
-  if (cachedCrawlPages.length === 0) {
-    alert('No cached pages to verify. Run a scan first.');
-    return;
-  }
-
-  const selectedModel = $('modelSelect').value;
-  const hasAIKey = isOpenAIModel(selectedModel) ? !!$('oaiKey').value.trim() : !!$('aiKey').value.trim();
-  if (!hasAIKey) {
-    alert('Add an AI key (Anthropic or OpenAI) to verify with AI.');
-    return;
-  }
-
-  // Reset UI for re-analysis
-  exploitCount = 0;
-  $('eList').innerHTML = '';
-  $('eCount').textContent = '';
-  show('logSection'); show('exploitSection');
-  show('pWrap');
-  $('reAnalyzeBtn').disabled = true;
-  $('reAnalyzeBtn').textContent = 'Verifying...';
-  $('liveBadge').textContent = 'verifying...';
-  $('liveBadge').classList.add('active');
-  show('liveBadge');
-
-  log(`re-analyzing ${cachedCrawlPages.length} cached pages with AI...`, 'info');
-
-  // Optional: quick plugin detection from spammer URL
-  if (!cachedPlugin) {
-    const spammerUrl = $('urlInput').value.trim();
-    if (spammerUrl) {
-      try {
-        log('ai analyzing spammer url for plugin context...', 'info');
-        const text = await callAI(null,
-          `Spammer URL: ${spammerUrl}\nReturn ONLY JSON: {"cms":"wordpress|joomla|drupal|generic","plugin":"name or null","vulnerability_type":"file_upload|registration|contact_form|other","plugin_keywords":["3-5 words visible on the exploit page form"]}`,
-          300
-        );
-        const parsed = parseAIJSON(text);
-        if (parsed) {
-          cachedPlugin = parsed.plugin;
-          aiPluginKeywords = parsed.plugin_keywords || [];
-          log(`plugin: ${cachedPlugin || 'unknown'} \u00b7 keywords: ${aiPluginKeywords.join(', ')}`, 'ok');
-        }
-      } catch (e) {
-        log('plugin detection failed: ' + e.message, 'warn');
-      }
-    }
-  }
-
-  let falsePositives = 0;
-
-  for (let i = 0; i < cachedCrawlPages.length; i++) {
-    const page = cachedCrawlPages[i];
-    const shortUrl = page.url.split('/').pop()?.substring(0, 40) || page.url;
-    setProgress(i + 1, cachedCrawlPages.length, `verifying ${i + 1}/${cachedCrawlPages.length} \u00b7 ${shortUrl}`);
-
-    try {
-      const aiResult = await aiClassifyPage(page.url, page.markdown, cachedPlugin);
-      if (aiResult?.is_exploit) {
-        log(`CONFIRMED \u00b7 ${page.url}`, 'ok');
-        addExploitCard(page.url, {
-          form_type: aiResult.form_type,
-          confidence: aiResult.confidence,
-          evidence: aiResult.evidence
-        }, 'ai');
-      } else {
-        falsePositives++;
-        log(`false positive \u00b7 ${page.url}`, 'warn');
-      }
-    } catch (e) {
-      log(`ai error on ${page.url}: ${e.message}`, 'err');
-    }
-
-    if (i % 3 === 2) await sleep(100);
-  }
-
-  if (exploitCount === 0) {
-    $('eList').innerHTML = '<div class="empty">no exploit pages confirmed by AI</div>';
-  }
-
-  log(`verification complete \u00b7 ${exploitCount} confirmed \u00b7 ${falsePositives} false positives filtered`, 'ok');
-
-  $('liveBadge').textContent = `${exploitCount} verified exploit${exploitCount !== 1 ? 's' : ''}`;
-  $('liveBadge').classList.remove('active');
-  $('reAnalyzeBtn').disabled = false;
-  $('reAnalyzeBtn').textContent = `Verify ${cachedCrawlPages.length} pages with AI \u2192`;
-  hide('pWrap');
-}
-
-// ─── MODE + TIER SWITCHING ──────────────────────────────────────
-
-function switchMode(mode) {
-  currentMode = mode;
-  $('modeScanner').className = mode === 'scanner' ? 'mode-btn active' : 'mode-btn';
-  $('modeExtractor').className = mode === 'extractor' ? 'mode-btn active' : 'mode-btn';
-  $('modeVuln').className = mode === 'vuln' ? 'mode-btn active' : 'mode-btn';
-  $('modeUpload').className = mode === 'upload' ? 'mode-btn active' : 'mode-btn';
-
-  // Hide all config sections first
-  hide('scannerConfig');
-  hide('extractorConfig');
-  hide('vulnConfig');
-  hide('uploadConfig');
-
-  if (mode === 'scanner') {
-    show('scannerConfig');
-    hide('feResultSection');
-    hide('vsResultSection');
-    hide('uploadResultSection');
-    $('fcKeyLabel').className = 'opt';
-    $('fcKeyLabel').textContent = 'optional \u00b7 form extractor only';
-    $('aiKeyLabel').className = 'opt';
-    $('aiKeyLabel').textContent = 'optional \u00b7 improves accuracy';
-    $('oaiKeyLabel').className = 'opt';
-    $('oaiKeyLabel').textContent = 'optional';
-  } else if (mode === 'extractor') {
-    show('extractorConfig');
-    hide('exploitSection');
-    hide('vsResultSection');
-    hide('uploadResultSection');
-  } else if (mode === 'vuln') {
-    show('vulnConfig');
-    hide('exploitSection');
-    hide('feResultSection');
-    hide('uploadResultSection');
-  } else if (mode === 'upload') {
-    show('uploadConfig');
-    hide('exploitSection');
-    hide('feResultSection');
-    hide('vsResultSection');
-  }
-  updateConfigVisibility();
-}
-
-function switchTier(tier) {
-  currentTier = tier;
-  localStorage.setItem('bg_tier', tier);
-  for (const btn of document.querySelectorAll('.tier-btn')) {
-    btn.classList.toggle('active', btn.dataset.tier === tier);
-  }
-  const hints = {
-    basic: 'DOM-only extraction \u2014 no API keys needed, won\'t work for JS-rendered forms',
-    firecrawl: 'Scrapes JS-rendered pages, then DOM extraction \u2014 Firecrawl key only',
-    ai: 'Full AI analysis \u2014 best for complex forms \u2014 needs Firecrawl + AI keys'
-  };
-  $('tierHint').textContent = hints[tier];
-  updateConfigVisibility();
-}
-
-function updateConfigVisibility() {
-  if (currentMode === 'upload') {
-    $('keyRow1').classList.remove('hidden');
-    $('keyRow2').classList.remove('hidden');
-    $('fcKeyField').classList.add('hidden');
-    $('aiKeyField').classList.remove('hidden');
-    $('aiKeyLabel').className = 'opt';
-    $('aiKeyLabel').textContent = 'recommended \u00b7 AI page analysis';
-    $('oaiKeyLabel').className = 'opt';
-    $('oaiKeyLabel').textContent = 'optional';
-    return;
-  }
-  if (currentMode === 'vuln') {
-    $('keyRow1').classList.remove('hidden');
-    $('keyRow2').classList.remove('hidden');
-    $('fcKeyField').classList.add('hidden');
-    $('aiKeyField').classList.remove('hidden');
-    $('aiKeyLabel').className = 'opt';
-    $('aiKeyLabel').textContent = 'optional \u00b7 AI-enhanced probing';
-    $('oaiKeyLabel').className = 'opt';
-    $('oaiKeyLabel').textContent = 'optional';
-    return;
-  }
-  if (currentMode === 'scanner') {
-    $('keyRow1').classList.remove('hidden');
-    $('keyRow2').classList.remove('hidden');
-    $('fcKeyField').classList.remove('hidden');
-    $('aiKeyField').classList.remove('hidden');
-    return;
-  }
-  // Extractor mode — visibility depends on tier
-  if (currentTier === 'basic') {
-    $('keyRow1').classList.add('hidden');
-    $('keyRow2').classList.add('hidden');
-  } else if (currentTier === 'firecrawl') {
-    $('keyRow1').classList.remove('hidden');
-    $('fcKeyField').classList.remove('hidden');
-    $('fcKeyLabel').className = 'req';
-    $('fcKeyLabel').textContent = 'required';
-    $('aiKeyField').classList.add('hidden');
-    $('keyRow2').classList.add('hidden');
-  } else { // ai
-    $('keyRow1').classList.remove('hidden');
-    $('fcKeyField').classList.remove('hidden');
-    $('fcKeyLabel').className = 'req';
-    $('fcKeyLabel').textContent = 'required';
-    $('aiKeyField').classList.remove('hidden');
-    $('keyRow2').classList.remove('hidden');
-    updateKeyLabels();
-  }
-}
-
-function updateKeyLabels() {
-  const model = $('modelSelect').value;
-  if (currentMode === 'scanner') return;
-  if (currentTier !== 'ai') return;
-  if (isOpenAIModel(model)) {
-    $('aiKeyLabel').className = 'opt';
-    $('aiKeyLabel').textContent = 'optional';
-    $('oaiKeyLabel').className = 'req';
-    $('oaiKeyLabel').textContent = 'required';
-  } else {
-    $('aiKeyLabel').className = 'req';
-    $('aiKeyLabel').textContent = 'required';
-    $('oaiKeyLabel').className = 'opt';
-    $('oaiKeyLabel').textContent = 'optional';
-  }
-}
-
-// ─── FORM EXTRACTOR: SCRAPE ────────────────────────────────────
-
-async function feScrapePages(fcKey, urls) {
-  const results = [];
-  const concurrency = 2;
-  let i = 0;
-
-  async function scrapeOne(url) {
-    for (let retry = 0; retry < 3; retry++) {
-      if (feState === 'stopped') return null;
-      while (feState === 'paused') await sleep(400);
-
-      try {
-        const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + fcKey
-          },
-          body: JSON.stringify({
-            url,
-            formats: ['rawHtml'],
-            onlyMainContent: false,
-            waitFor: 5000,
-            actions: [
-              { type: 'wait', milliseconds: 3000 },
-              { type: 'wait', selector: 'form, input, textarea, select, [class*="form"], [class*="wpem"], [data-form]' }
-            ],
-            timeout: 45000
-          })
-        });
-
-        if (res.status === 429) {
-          const wait = Math.pow(2, retry) * 1000;
-          log(`rate limited, retrying in ${wait / 1000}s...`, 'warn');
-          await sleep(wait);
-          continue;
-        }
-
-        if (res.status >= 500) {
-          log(`server error scraping ${url}, skipping`, 'warn');
-          return null;
-        }
-
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-
-        const data = await res.json();
-        feCreditsUsed++;
-        $('feCreditBadge').textContent = feCreditsUsed + ' credits used';
-        return { url, html: data.data?.rawHtml || data.data?.html || '' };
-      } catch (e) {
-        if (retry === 2) {
-          log(`failed to scrape ${url}: ${e.message}`, 'warn');
-          return null;
-        }
-      }
-    }
-    return null;
-  }
-
-  while (i < urls.length) {
-    if (feState === 'stopped') break;
-    while (feState === 'paused') await sleep(400);
-
-    const batch = [];
-    for (let j = 0; j < concurrency && i < urls.length; j++, i++) {
-      batch.push(scrapeOne(urls[i]));
-      if (j < concurrency - 1) await sleep(300);
-    }
-
-    const batchResults = await Promise.all(batch);
-    for (const r of batchResults) {
-      if (r) results.push(r);
-    }
-
-    setProgress(i, urls.length, `scraping ${i}/${urls.length} pages`);
-  }
-
-  return results;
-}
-
-// ─── FORM EXTRACTOR: RECON + STRATEGIES ─────────────────────────
+// ─── FORM EXTRACTOR: RECON ─────────────────────────────────────
 
 function feReconPage(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  const recon = {
-    formCount: doc.querySelectorAll('form').length,
-    inputCount: doc.querySelectorAll('input,select,textarea').length,
-    iframeSrcs: [],
-    jsLoaders: [],
-    plugins: [],
-    hasFileUpload: !!doc.querySelector('input[type="file"]') || /enctype.*multipart/i.test(html)
-  };
-
-  for (const iframe of doc.querySelectorAll('iframe[src]')) {
-    const src = iframe.getAttribute('src');
-    if (/form|survey|register|signup|submit|contact|typeform|jotform|google\.com\/forms|formstack|wufoo|cognito/i.test(src)) {
-      recon.iframeSrcs.push(src);
-    }
-  }
-
-  for (const s of doc.querySelectorAll('script[src]')) {
-    const src = s.getAttribute('src') || '';
-    if (/react|vue|angular|ninja-forms|wpforms|gravityforms|formidable|elementor/i.test(src)) {
-      recon.jsLoaders.push(src.split('/').pop());
-    }
-  }
-
+  const recon = { formCount: doc.querySelectorAll('form').length, inputCount: doc.querySelectorAll('input,select,textarea').length, plugins: [] };
   const h = html.substring(0, 120000);
-  const sigs = [
-    [/wpcf7|contact-form-7/i,'CF7'], [/wpforms/i,'WPForms'],
-    [/gform|gravityforms/i,'Gravity'], [/ninja-forms|nf-/i,'Ninja'],
-    [/formidable/i,'Formidable'], [/elementor.*form/i,'Elementor'],
-    [/forminator/i,'Forminator'], [/fluent-form|fluentform/i,'Fluent'],
-    [/wp-event-manager|wpem/i,'WP Event Manager'], [/caldera/i,'Caldera'],
-    [/happyforms/i,'HappyForms'], [/ws-form|wsf-/i,'WS Form'],
-    [/everest-forms/i,'Everest'],
-  ];
+  const sigs = [[/wpcf7|contact-form-7/i,'CF7'],[/wpforms/i,'WPForms'],[/gform|gravityforms/i,'Gravity'],[/ninja-forms|nf-/i,'Ninja'],[/formidable/i,'Formidable'],[/elementor.*form/i,'Elementor'],[/forminator/i,'Forminator'],[/fluent-form|fluentform|ff-/i,'Fluent'],[/wp-event-manager|wpem/i,'WP Event Manager'],[/caldera/i,'Caldera'],[/happyforms/i,'HappyForms'],[/ws-form|wsf-/i,'WS Form'],[/everest-forms/i,'Everest']];
   for (const [re, name] of sigs) { if (re.test(h)) recon.plugins.push(name); }
-
   return recon;
 }
 
-function feExtractRawHTML(html) {
-  let s = html;
-  s = s.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-  s = s.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-  s = s.replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '');
-  s = s.replace(/<!--[\s\S]*?-->/g, '');
-  s = s.replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, '');
-  s = s.replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '');
-  s = s.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '');
-  s = s.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '');
-  s = s.replace(/\s{2,}/g, ' ');
-  return s;
-}
-
-async function feScrapeIframes(fcKey, iframeSrcs, originUrl) {
-  const resolved = iframeSrcs.map(src =>
-    src.startsWith('http') ? src : new URL(src, originUrl).href
-  );
-  return feScrapePages(fcKey, resolved);
-}
-
-// ─── FORM EXTRACTOR: DOM EXTRACTION (BASIC + FIRECRAWL TIERS) ──
+// ─── FORM EXTRACTOR: DOM EXTRACTION ────────────────────────────
 
 function feExtractDOM(html) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const forms = [];
 
   for (const formEl of doc.querySelectorAll('form')) {
-    // Skip search forms
     if (formEl.getAttribute('role') === 'search') continue;
     const searchInput = formEl.querySelector('input[type="search"]');
     if (searchInput && formEl.querySelectorAll('input,select,textarea').length <= 2) continue;
 
-    // Detect plugin from class names / HTML
     const fHtml = formEl.outerHTML.substring(0, 8000);
     let plugin = 'HTML';
-    const pluginSigs = [
-      [/wpcf7|contact-form-7/i, 'CF7'],
-      [/wpforms/i, 'WPForms'],
-      [/gform_wrapper|gform_body|gravityforms/i, 'Gravity Forms'],
-      [/ninja-forms|nf-form/i, 'Ninja Forms'],
-      [/formidable/i, 'Formidable'],
-      [/elementor.*form|e-form/i, 'Elementor'],
-      [/forminator/i, 'Forminator'],
-      [/fluent-form|fluentform|ff-/i, 'Fluent Forms'],
-      [/wp-event-manager|wpem/i, 'WP Event Manager'],
-      [/caldera/i, 'Caldera'],
-      [/happyforms/i, 'HappyForms'],
-      [/ws-form|wsf-/i, 'WS Form'],
-      [/everest-forms/i, 'Everest'],
-    ];
-    for (const [re, name] of pluginSigs) {
-      if (re.test(fHtml)) { plugin = name; break; }
-    }
+    const pluginSigs = [[/wpcf7|contact-form-7/i,'CF7'],[/wpforms/i,'WPForms'],[/gform_wrapper|gform_body|gravityforms/i,'Gravity Forms'],[/ninja-forms|nf-form/i,'Ninja Forms'],[/formidable/i,'Formidable'],[/elementor.*form|e-form/i,'Elementor'],[/forminator/i,'Forminator'],[/fluent-form|fluentform|ff-/i,'Fluent Forms'],[/wp-event-manager|wpem/i,'WP Event Manager'],[/caldera/i,'Caldera'],[/happyforms/i,'HappyForms'],[/ws-form|wsf-/i,'WS Form'],[/everest-forms/i,'Everest']];
+    for (const [re, name] of pluginSigs) { if (re.test(fHtml)) { plugin = name; break; } }
 
-    // Detect multi-step
-    const isMultiStep = !!(
-      formEl.querySelector('fieldset[data-step]') ||
-      formEl.querySelector('.gform_page') ||
-      formEl.querySelector('.wpforms-page') ||
-      formEl.querySelector('[data-step]') ||
-      formEl.querySelector('.nf-page-break') ||
-      formEl.querySelector('.forminator-pagination') ||
-      formEl.querySelector('.frmPageNum')
-    );
+    const isMultiStep = !!(formEl.querySelector('fieldset[data-step]') || formEl.querySelector('.gform_page') || formEl.querySelector('.wpforms-page') || formEl.querySelector('[data-step]') || formEl.querySelector('.nf-page-break') || formEl.querySelector('.forminator-pagination') || formEl.querySelector('.frmPageNum'));
 
-    // Extract fields
     const fields = [];
     const radioCheckSeen = new Set();
 
     for (const el of formEl.querySelectorAll('input, select, textarea')) {
       const tagName = el.tagName.toLowerCase();
-      let type;
-      if (tagName === 'textarea') type = 'textarea';
-      else if (tagName === 'select') type = 'select';
-      else type = (el.getAttribute('type') || 'text').toLowerCase();
-
-      // Skip submit/button/image/reset
-      if (['submit', 'button', 'image', 'reset'].includes(type)) continue;
+      let type; if (tagName === 'textarea') type = 'textarea'; else if (tagName === 'select') type = 'select'; else type = (el.getAttribute('type') || 'text').toLowerCase();
+      if (['submit','button','image','reset'].includes(type)) continue;
 
       const name = el.getAttribute('name') || '';
       const id = el.getAttribute('id') || '';
-      const required = el.hasAttribute('required') ||
-                        el.classList.contains('required') ||
-                        el.getAttribute('aria-required') === 'true';
+      const required = el.hasAttribute('required') || el.classList.contains('required') || el.getAttribute('aria-required') === 'true';
       const placeholder = el.getAttribute('placeholder') || null;
 
-      // Deduplicate radio/checkbox groups
-      if ((type === 'radio' || type === 'checkbox') && name) {
-        if (radioCheckSeen.has(name)) continue;
-        radioCheckSeen.add(name);
-      }
+      if ((type === 'radio' || type === 'checkbox') && name) { if (radioCheckSeen.has(name)) continue; radioCheckSeen.add(name); }
 
-      // Find label — resolution chain
       let label = null;
-
-      // 1. <label for="id">
-      if (id) {
-        try {
-          const labelEl = doc.querySelector('label[for="' + CSS.escape(id) + '"]');
-          if (labelEl) label = labelEl.textContent.trim();
-        } catch(e) {}
-      }
-
-      // 2. Parent <label>
-      if (!label) {
-        const parentLabel = el.closest('label');
-        if (parentLabel) {
-          const textNodes = Array.from(parentLabel.childNodes)
-            .filter(n => n.nodeType === 3)
-            .map(n => n.textContent.trim())
-            .join(' ').trim();
-          label = textNodes || parentLabel.textContent.trim();
-        }
-      }
-
-      // 3. aria-label
+      if (id) { try { const labelEl = doc.querySelector('label[for="' + CSS.escape(id) + '"]'); if (labelEl) label = labelEl.textContent.trim(); } catch(e) {} }
+      if (!label) { const parentLabel = el.closest('label'); if (parentLabel) { const textNodes = Array.from(parentLabel.childNodes).filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join(' ').trim(); label = textNodes || parentLabel.textContent.trim(); } }
       if (!label) label = el.getAttribute('aria-label');
-
-      // 4. aria-labelledby
-      if (!label && el.getAttribute('aria-labelledby')) {
-        const lblEl = doc.getElementById(el.getAttribute('aria-labelledby'));
-        if (lblEl) label = lblEl.textContent.trim();
-      }
-
-      // 5. Preceding sibling text
-      if (!label) {
-        const prev = el.previousElementSibling;
-        if (prev && (prev.tagName === 'LABEL' || prev.tagName === 'SPAN' || prev.tagName === 'P')) {
-          label = prev.textContent.trim();
-        }
-      }
-
-      // 6. Fallback: make name readable
-      if (!label && name) {
-        label = name.replace(/[\[\]_\-\.]+/g, ' ').replace(/\s+/g, ' ').trim();
-      }
+      if (!label && el.getAttribute('aria-labelledby')) { const lblEl = doc.getElementById(el.getAttribute('aria-labelledby')); if (lblEl) label = lblEl.textContent.trim(); }
+      if (!label) { const prev = el.previousElementSibling; if (prev && (prev.tagName === 'LABEL' || prev.tagName === 'SPAN' || prev.tagName === 'P')) label = prev.textContent.trim(); }
+      if (!label && name) label = name.replace(/[\[\]_\-\.]+/g, ' ').replace(/\s+/g, ' ').trim();
       if (!label) label = placeholder || type;
-
-      // Clean label
       if (label) label = label.replace(/\s+/g, ' ').trim().substring(0, 120);
 
-      // Options for selects
       let options = null;
-      if (tagName === 'select') {
-        const opts = Array.from(el.querySelectorAll('option'))
-          .map(o => o.textContent.trim())
-          .filter(t => t && !t.match(/^-+$/) && !t.match(/^select/i));
-        if (opts.length) options = opts;
-      }
-
-      // Options for radio/checkbox groups
-      if ((type === 'radio' || type === 'checkbox') && name) {
-        try {
-          const group = formEl.querySelectorAll('input[name="' + CSS.escape(name) + '"]');
-          if (group.length > 1) {
-            const opts = Array.from(group).map(r => {
-              const rId = r.getAttribute('id');
-              if (rId) {
-                try {
-                  const rLabel = doc.querySelector('label[for="' + CSS.escape(rId) + '"]');
-                  if (rLabel) return rLabel.textContent.trim();
-                } catch(e) {}
-              }
-              return r.getAttribute('value') || '';
-            }).filter(Boolean);
-            if (opts.length) options = opts;
-          }
-        } catch(e) {}
-      }
+      if (tagName === 'select') { const opts = Array.from(el.querySelectorAll('option')).map(o => o.textContent.trim()).filter(t => t && !t.match(/^-+$/) && !t.match(/^select/i)); if (opts.length) options = opts; }
+      if ((type === 'radio' || type === 'checkbox') && name) { try { const group = formEl.querySelectorAll('input[name="' + CSS.escape(name) + '"]'); if (group.length > 1) { const opts = Array.from(group).map(r => { const rId = r.getAttribute('id'); if (rId) { try { const rLabel = doc.querySelector('label[for="' + CSS.escape(rId) + '"]'); if (rLabel) return rLabel.textContent.trim(); } catch(e) {} } return r.getAttribute('value') || ''; }).filter(Boolean); if (opts.length) options = opts; } } catch(e) {} }
 
       fields.push({ label, name, type, required, placeholder, options });
     }
-
-    if (fields.length > 0) {
-      forms.push({ plugin, is_multi_step: isMultiStep, fields });
-    }
+    if (fields.length > 0) forms.push({ plugin, is_multi_step: isMultiStep, fields });
   }
-
   return { forms };
 }
 
-// ─── FORM EXTRACTOR: AI EXTRACT ─────────────────────────────────
+// ─── FORM EXTRACTOR: AI EXTRACT ────────────────────────────────
 
 function feExtractFormHTML(html) {
-  try {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const forms = doc.querySelectorAll('form');
-    if (forms.length > 0) {
-      return Array.from(forms).map(f => f.outerHTML).join('\n');
-    }
-  } catch(e) {}
-  let s = html;
-  s = s.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-  s = s.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-  s = s.replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '');
-  s = s.replace(/<!--[\s\S]*?-->/g, '');
-  s = s.replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, '');
-  s = s.replace(/\s{2,}/g, ' ');
+  try { const doc = new DOMParser().parseFromString(html, 'text/html'); const forms = doc.querySelectorAll('form'); if (forms.length > 0) return Array.from(forms).map(f => f.outerHTML).join('\n'); } catch(e) {}
+  let s = html; s = s.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ''); s = s.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ''); s = s.replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, ''); s = s.replace(/<!--[\s\S]*?-->/g, ''); s = s.replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, ''); s = s.replace(/\s{2,}/g, ' ');
+  return s;
+}
+
+function feExtractRawHTML(html) {
+  let s = html; s = s.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ''); s = s.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ''); s = s.replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, ''); s = s.replace(/<!--[\s\S]*?-->/g, ''); s = s.replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, ''); s = s.replace(/<header[^>]*>[\s\S]*?<\/header>/gi, ''); s = s.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, ''); s = s.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, ''); s = s.replace(/\s{2,}/g, ' ');
   return s;
 }
 
@@ -2592,7 +532,7 @@ async function feAiExtract(pageUrl, html, mode = 'standard') {
   const userPrompt = `Analyze this web page HTML and extract ALL form structures.
 
 For each form found, return:
-- plugin: the WordPress form plugin name (CF7, WPForms, Gravity Forms, Ninja Forms, Formidable, Elementor, Forminator, Fluent Forms, or "HTML" for plain forms)
+- plugin: the form plugin name (CF7, WPForms, Gravity Forms, Ninja Forms, Formidable, Elementor, Forminator, Fluent Forms, WP Event Manager, or "HTML" for plain forms)
 - is_multi_step: true if form has multiple steps/pages
 - fields: array of every user-fillable field with:
   - label: the visible label text
@@ -2604,7 +544,6 @@ For each form found, return:
 
 Skip search forms. Include hidden fields but mark type as "hidden".
 Return ONLY valid JSON: {"forms":[{...}]}
-If no forms found, return: {"forms":[]}
 
 Page URL: ${pageUrl}
 HTML:
@@ -2614,1016 +553,452 @@ ${truncated}`;
   log(`AI response: ${text.length} chars`, 'info');
 
   let cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '');
-
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) {
-    log('AI response has no JSON object', 'warn');
-    return null;
-  }
-  try {
-    return JSON.parse(cleaned.substring(start, end + 1));
-  } catch (e) {
+  const start = cleaned.indexOf('{'); const end = cleaned.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) { log('AI response has no JSON', 'warn'); return null; }
+  try { return JSON.parse(cleaned.substring(start, end + 1)); }
+  catch (e) {
     let repaired = cleaned.substring(start);
     repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, '');
-    let opens = 0;
-    for (const ch of repaired) {
-      if (ch === '[') opens++;
-      else if (ch === ']') opens--;
-    }
-    if (opens > 0) repaired += ']'.repeat(opens);
-    opens = 0;
-    for (const ch of repaired) {
-      if (ch === '{') opens++;
-      else if (ch === '}') opens--;
-    }
-    if (opens > 0) repaired += '}'.repeat(opens);
-    try {
-      const result = JSON.parse(repaired);
-      log('JSON was truncated \u2014 repaired, some fields may be incomplete', 'warn');
-      return result;
-    } catch (e2) {
-      log('JSON parse failed (repair also failed): ' + e.message, 'warn');
-      return null;
-    }
+    let opens = 0; for (const ch of repaired) { if (ch === '[') opens++; else if (ch === ']') opens--; } if (opens > 0) repaired += ']'.repeat(opens);
+    opens = 0; for (const ch of repaired) { if (ch === '{') opens++; else if (ch === '}') opens--; } if (opens > 0) repaired += '}'.repeat(opens);
+    try { const result = JSON.parse(repaired); log('JSON repaired (may be incomplete)', 'warn'); return result; }
+    catch { log('JSON parse failed: ' + e.message, 'warn'); return null; }
   }
 }
 
-// ─── FORM EXTRACTOR: RENDER RESULTS ─────────────────────────────
+// ─── FORM EXTRACTOR: RENDER ────────────────────────────────────
 
 function feRenderResults(results) {
-  const list = $('feList');
-  list.innerHTML = '';
-
-  let totalForms = 0;
-  let totalFields = 0;
-
-  if (!results.length) {
-    list.innerHTML = '<div class="empty">No forms detected on scanned pages</div>';
-    $('feCount').textContent = '(0 found)';
-    return;
-  }
-
-  const tierLabels = { basic: 'Basic', firecrawl: 'Firecrawl', ai: 'AI' };
-  const tierColors = { basic: 'b-green', firecrawl: 'b-info', ai: 'b-pink' };
+  const list = $('feList'); list.innerHTML = '';
+  let totalForms = 0, totalFields = 0;
+  if (!results.length) { list.innerHTML = '<div class="empty">No forms detected</div>'; $('feCount').textContent = '(0 found)'; return; }
 
   for (const page of results) {
     if (!page.forms || !page.forms.length) continue;
-
     for (const form of page.forms) {
-      totalForms++;
-      totalFields += (form.fields || []).length;
+      totalForms++; totalFields += (form.fields || []).length;
+      const card = document.createElement('div'); card.className = 'fe-card';
+      const pluginBadge = form.plugin ? `<span class="badge b-info">${esc(form.plugin)}</span>` : '';
+      const fc = (form.fields || []).length;
+      const fieldBadge = `<span class="badge b-low">${fc} field${fc !== 1 ? 's' : ''}</span>`;
+      const msBadge = form.is_multi_step ? '<span class="badge b-multi">multi-step</span>' : '';
+      const tBadge = page.tier ? `<span class="badge ${page.tier === 'basic' ? 'b-green' : 'b-pink'}">${page.tier}</span>` : '';
 
-      const card = document.createElement('div');
-      card.className = 'fe-card';
-
-      const pluginBadge = form.plugin
-        ? `<span class="badge b-info">${esc(form.plugin)}</span>` : '';
-      const fieldCount = (form.fields || []).length;
-      const fieldBadge = `<span class="badge b-low">${fieldCount} field${fieldCount !== 1 ? 's' : ''}</span>`;
-      const multiStepBadge = form.is_multi_step
-        ? '<span class="badge b-multi">multi-step</span>' : '';
-      const tierBadge = page.tier
-        ? `<span class="badge ${tierColors[page.tier]}">${tierLabels[page.tier]}</span>` : '';
-
-      let tableRows = '';
+      let rows = '';
       for (const f of (form.fields || [])) {
-        const reqClass = f.required ? 'req-yes' : 'req-no';
-        const options = f.options ? esc(f.options.join(' | ')) : '';
-        tableRows += `<tr>
-          <td>${esc(f.label || '\u2014')}</td>
-          <td>${esc(f.name || '\u2014')}</td>
-          <td>${esc(f.type || '\u2014')}</td>
-          <td class="${reqClass}">${f.required ? 'yes' : 'no'}</td>
-          <td>${esc(f.placeholder || '')}</td>
-          <td>${options}</td>
-        </tr>`;
+        const rc = f.required ? 'req-yes' : 'req-no';
+        rows += `<tr><td>${esc(f.label||'\u2014')}</td><td>${esc(f.name||'\u2014')}</td><td>${esc(f.type||'\u2014')}</td><td class="${rc}">${f.required?'yes':'no'}</td><td>${esc(f.placeholder||'')}</td><td>${f.options?esc(f.options.join(' | ')):''}</td></tr>`;
       }
 
-      card.innerHTML = `
-        <div class="fe-card-header" onclick="this.parentElement.classList.toggle('open')">
-          <span class="fe-card-url">${esc(page.url)}</span>
-          <div class="fe-card-badges">${pluginBadge}${fieldBadge}${multiStepBadge}${tierBadge}</div>
-          <span class="fe-card-arrow">&#9660;</span>
-        </div>
-        <div class="fe-card-body">
-          <table class="fe-table">
-            <thead><tr><th>Label</th><th>Name</th><th>Type</th><th>Required</th><th>Placeholder</th><th>Options</th></tr></thead>
-            <tbody>${tableRows}</tbody>
-          </table>
-        </div>`;
-
+      card.innerHTML = `<div class="fe-card-header" onclick="this.parentElement.classList.toggle('open')"><span class="fe-card-url">${esc(page.url)}</span><div class="fe-card-badges">${pluginBadge}${fieldBadge}${msBadge}${tBadge}</div><span class="fe-card-arrow">&#9660;</span></div><div class="fe-card-body"><table class="fe-table"><thead><tr><th>Label</th><th>Name</th><th>Type</th><th>Required</th><th>Placeholder</th><th>Options</th></tr></thead><tbody>${rows}</tbody></table></div>`;
       list.appendChild(card);
     }
   }
-
-  $('feCount').textContent = totalForms
-    ? `(${totalForms} form${totalForms !== 1 ? 's' : ''} \u00b7 ${totalFields} fields)`
-    : '(0 found)';
-
-  if (!totalForms) {
-    list.innerHTML = '<div class="empty">No forms detected on scanned pages</div>';
-  }
+  $('feCount').textContent = totalForms ? `(${totalForms} form${totalForms!==1?'s':''} \u00b7 ${totalFields} fields)` : '(0 found)';
+  if (!totalForms) list.innerHTML = '<div class="empty">No forms detected</div>';
 }
 
-// ─── FORM EXTRACTOR: EXPORT ─────────────────────────────────────
-
-function feExportJson() {
-  if (!feResults.length) return;
-
-  const siteUrl = $('feUrl').value.trim();
-  const host = extractHost(siteUrl) || 'site';
-  const date = new Date().toISOString().split('T')[0];
-
-  let totalForms = 0, totalFields = 0;
-  for (const p of feResults) {
-    totalForms += (p.forms || []).length;
-    for (const f of (p.forms || [])) totalFields += (f.fields || []).length;
-  }
-
-  const data = {
-    site: siteUrl,
-    extracted_at: date,
-    tier: currentTier,
-    summary: { pages: feResults.length, forms: totalForms, fields: totalFields },
-    pages: feResults.map(p => ({
-      url: p.url,
-      forms: p.forms || []
-    }))
-  };
-
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `forms-${host}-${date}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
+// ─── FORM EXTRACTOR: EXPORT ────────────────────────────────────
 
 function feExportCsv() {
   if (!feResults.length) return;
-
-  const siteUrl = $('feUrl').value.trim();
-  const host = extractHost(siteUrl) || 'site';
+  const host = extractHost($('feUrl').value.trim()) || 'site';
   const date = new Date().toISOString().split('T')[0];
-
-  const rows = [['Page URL', 'Form Plugin', 'Field Label', 'Field Name', 'Type', 'Required', 'Placeholder', 'Options']];
-
-  for (const page of feResults) {
-    for (const form of (page.forms || [])) {
-      for (const field of (form.fields || [])) {
-        rows.push([
-          page.url,
-          form.plugin || '',
-          field.label || '',
-          field.name || '',
-          field.type || '',
-          field.required ? 'yes' : 'no',
-          field.placeholder || '',
-          (field.options || []).join('|')
-        ]);
-      }
-    }
-  }
-
+  const rows = [['Page URL','Form Plugin','Field Label','Field Name','Type','Required','Placeholder','Options']];
+  for (const page of feResults) for (const form of (page.forms||[])) for (const f of (form.fields||[]))
+    rows.push([page.url, form.plugin||'', f.label||'', f.name||'', f.type||'', f.required?'yes':'no', f.placeholder||'', (f.options||[]).join('|')]);
   const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `forms-${host}-${date}.csv`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = `forms-${host}-${date}.csv`; a.click();
 }
 
-// ─── FORM EXTRACTOR: ORCHESTRATOR ───────────────────────────────
+function feExportJson() {
+  if (!feResults.length) return;
+  const host = extractHost($('feUrl').value.trim()) || 'site';
+  const date = new Date().toISOString().split('T')[0];
+  let tf = 0, tfi = 0;
+  for (const p of feResults) { tf += (p.forms||[]).length; for (const f of (p.forms||[])) tfi += (f.fields||[]).length; }
+  const data = { site: $('feUrl').value.trim(), extracted_at: date, tier: currentTier, summary: { pages: feResults.length, forms: tf, fields: tfi }, pages: feResults.map(p => ({ url: p.url, forms: p.forms || [] })) };
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  a.download = `forms-${host}-${date}.json`; a.click();
+}
+
+// ─── FORM EXTRACTOR: ORCHESTRATOR ──────────────────────────────
 
 async function runFormExtraction() {
   const siteUrl = $('feUrl').value.trim();
-  if (!siteUrl) { alert('Enter the site URL to extract forms from.'); return; }
-
-  const origin = extractOrigin(siteUrl);
-  if (!origin) { alert('Invalid URL. Include https://'); return; }
-
+  if (!siteUrl) { alert('Enter the page URL.'); return; }
   const tier = currentTier;
 
-  // Validate keys based on tier
-  if (tier === 'firecrawl' || tier === 'ai') {
-    if (!$('fcKey').value.trim()) { alert('Firecrawl API key is required for this tier.'); return; }
-  }
   if (tier === 'ai') {
     const model = $('modelSelect').value;
-    if (isOpenAIModel(model)) {
-      if (!$('oaiKey').value.trim()) { alert('OpenAI API key is required for the selected model.'); return; }
-    } else {
-      if (!$('aiKey').value.trim()) { alert('Anthropic API key is required for the selected model.'); return; }
-    }
+    if (isOpenAIModel(model)) { if (!$('oaiKey').value.trim()) { alert('OpenAI API key required for AI tier.'); return; } }
+    else { if (!$('aiKey').value.trim()) { alert('Anthropic API key required for AI tier.'); return; } }
   }
 
-  // Reset state
-  feState = 'scanning';
-  feResults = [];
-  feCreditsUsed = 0;
+  feState = 'scanning'; feResults = [];
+  $('feBtn').disabled = true; $('feBtn').textContent = 'Extracting...';
+  show('feStopBtn'); show('feLiveBadge');
+  $('feLiveBadge').textContent = 'extracting...'; $('feLiveBadge').classList.add('active');
+  $('logBox').innerHTML = ''; $('feList').innerHTML = ''; $('feCount').textContent = '';
 
-  // Reset UI
-  $('feBtn').disabled = true;
-  $('feBtn').textContent = 'Extracting...';
-  show('fePauseBtn'); show('feStopBtn'); show('feLiveBadge');
-  $('feLiveBadge').textContent = 'extracting...';
-  $('feLiveBadge').classList.add('active');
-  $('fePauseBtn').textContent = '\u23F8 Pause';
-  $('logBox').innerHTML = '';
-  $('feList').innerHTML = '';
-  $('feCount').textContent = '';
-  $('feCreditBadge').textContent = '0 credits used';
-
-  // Set tier badge
   const tierEl = $('feTierBadge');
   tierEl.textContent = tier.charAt(0).toUpperCase() + tier.slice(1) + ' tier';
-  tierEl.className = 'tier-badge ' + tier;
-  tierEl.style.display = '';
+  tierEl.className = 'tier-badge ' + tier; tierEl.style.display = '';
 
-  show('logSection'); show('feResultSection');
-  hide('pWrap');
-
+  show('logSection'); show('feResultSection'); show('pWrap');
   log('Form Extractor \u00b7 target: ' + siteUrl, 'info');
-  log('tier: ' + tier, 'info');
+  log('mode: ' + feMode + ', tier: ' + tier, 'info');
 
   try {
 
-    if (tier === 'basic') {
-      // ── BASIC: proxy fetch → DOM extract ──
-      log('fetching via proxy (Basic mode)...', 'info');
-      show('pWrap');
-      setProgress(0, 1, 'fetching page...');
-
-      const proxyUrl = '/proxy?url=' + encodeURIComponent(siteUrl);
-      const resp = await fetch(proxyUrl);
-      if (!resp.ok) {
-        const errText = await resp.text();
-        throw new Error('Proxy fetch failed: ' + errText.substring(0, 200));
-      }
-      const html = await resp.text();
-      setProgress(1, 1, 'parsing...');
-      log(`fetched ${(html.length / 1024).toFixed(1)}KB HTML`, 'ok');
-
-      if (!html || html.length < 50) {
-        log('page HTML too short or empty', 'warn');
-        feResults.push({ url: siteUrl, forms: [], tier: 'basic' });
+    // ── MULTI-STEP MODE: use Selenium backend ──
+    if (feMode === 'multi') {
+      log('opening in headless browser for multi-step extraction...', 'info');
+      setProgress(0, 1, 'loading form in browser...');
+      const res = await fetch('/extract/multistep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: siteUrl })
+      });
+      const data = await res.json();
+      setProgress(1, 1, 'done');
+      if (data.error) throw new Error(data.error);
+      log(`browser extracted ${data.total_fields} fields across ${data.steps_found} step(s)`, 'ok');
+      if (data.forms?.length) {
+        feResults.push({ url: siteUrl, forms: data.forms, tier: 'multi-step' });
       } else {
-        const recon = feReconPage(html);
-        log(`recon: ${recon.formCount} forms, ${recon.inputCount} inputs, plugins: ${recon.plugins.join(', ') || 'none'}`, 'info');
-
-        const result = feExtractDOM(html);
-        let fieldCount = 0;
-        for (const f of result.forms) fieldCount += (f.fields || []).length;
-        log(`DOM extracted: ${result.forms.length} form(s), ${fieldCount} fields`, 'ok');
-
-        feResults.push({ url: siteUrl, forms: result.forms, tier: 'basic' });
-      }
-
-    } else if (tier === 'firecrawl') {
-      // ── FIRECRAWL: scrape → DOM extract ──
-      const fcKey = $('fcKey').value.trim();
-      log('scraping via Firecrawl...', 'info');
-      show('pWrap');
-
-      const scraped = await feScrapePages(fcKey, [siteUrl]);
-      feCreditsUsed = scraped.length;
-      $('feCreditBadge').textContent = feCreditsUsed + ' credits used';
-      log(`scraped (${feCreditsUsed} credit${feCreditsUsed !== 1 ? 's' : ''})`, 'ok');
-
-      if (!scraped.length) {
-        log('failed to scrape page', 'warn');
-        throw 'NO_URLS';
-      }
-
-      if (feState === 'stopped') throw 'STOPPED';
-
-      const page = scraped[0];
-      if (!page.html || page.html.trim().length < 50) {
-        log('page HTML too short or empty', 'warn');
-        feResults.push({ url: page.url, forms: [], tier: 'firecrawl' });
-      } else {
-        const recon = feReconPage(page.html);
-        log(`recon: ${recon.formCount} forms, ${recon.inputCount} inputs, plugins: ${recon.plugins.join(', ') || 'none'}`, 'info');
-
-        const result = feExtractDOM(page.html);
-        let fieldCount = 0;
-        for (const f of result.forms) fieldCount += (f.fields || []).length;
-        log(`DOM extracted: ${result.forms.length} form(s), ${fieldCount} fields`, 'ok');
-
-        feResults.push({ url: page.url, forms: result.forms, tier: 'firecrawl' });
-
-        // Also check iframes
-        if (recon.iframeSrcs.length > 0) {
-          log(`following ${recon.iframeSrcs.length} iframe(s)...`, 'info');
-          const iframePages = await feScrapeIframes(fcKey, recon.iframeSrcs, siteUrl);
-          for (const ip of iframePages) {
-            if (ip.html && ip.html.length > 50) {
-              const iResult = feExtractDOM(ip.html);
-              if (iResult.forms.length > 0) {
-                feResults.push({ url: ip.url, forms: iResult.forms, tier: 'firecrawl' });
-              }
-            }
-          }
-        }
-      }
-
-    } else {
-      // ── AI TIER: Firecrawl scrape → AI analysis with DOM fallback ──
-      const fcKey = $('fcKey').value.trim();
-      log('scraping via Firecrawl...', 'info');
-      show('pWrap');
-
-      const scraped = await feScrapePages(fcKey, [siteUrl]);
-      feCreditsUsed = scraped.length;
-      $('feCreditBadge').textContent = feCreditsUsed + ' credits used';
-      log(`scraped (${feCreditsUsed} credit${feCreditsUsed !== 1 ? 's' : ''})`, 'ok');
-
-      if (!scraped.length) {
-        log('failed to scrape page', 'warn');
-        throw 'NO_URLS';
-      }
-
-      if (feState === 'stopped') throw 'STOPPED';
-
-      const page = scraped[0];
-      if (!page.html || page.html.trim().length < 50) {
-        log('page HTML too short or empty', 'warn');
-        feResults.push({ url: page.url, forms: [], tier: 'ai' });
-      } else {
-        const recon = feReconPage(page.html);
-        log(`recon: ${recon.formCount} forms, ${recon.inputCount} inputs, ` +
-            `iframes: ${recon.iframeSrcs.length}, plugins: ${recon.plugins.join(', ') || 'none'}`, 'info');
-
-        // Run parallel strategies (AI + DOM fallback)
-        log('running extraction strategies in parallel...', 'info');
-        const strategies = {};
-
-        strategies.standard = feAiExtract(page.url, page.html, 'standard');
-        strategies.raw = feAiExtract(page.url, page.html, 'raw');
-
-        if (recon.iframeSrcs.length > 0) {
-          log(`following ${recon.iframeSrcs.length} iframe(s)...`, 'info');
-          strategies.iframe = (async () => {
-            const iframePages = await feScrapeIframes(fcKey, recon.iframeSrcs, siteUrl);
-            if (!iframePages.length) return null;
-            return feAiExtract(iframePages[0].url, iframePages[0].html, 'standard');
-          })();
-        }
-
-        // DOM fallback strategy (runs instantly, catches AI failures)
-        strategies.dom = Promise.resolve(feExtractDOM(page.html));
-
-        const results = await Promise.allSettled(Object.values(strategies));
-        const labels = Object.keys(strategies);
-
-        let bestResult = null;
-        let bestFields = -1;
-        let bestLabel = '';
-
-        for (let i = 0; i < results.length; i++) {
-          const r = results[i];
-          if (r.status !== 'fulfilled' || !r.value?.forms?.length) {
-            if (r.status === 'rejected') {
-              log(`${labels[i]} strategy failed: ${r.reason?.message || r.reason}`, 'warn');
-            }
-            continue;
-          }
-          let fieldCount = 0;
-          for (const f of r.value.forms) fieldCount += (f.fields || []).length;
-          log(`${labels[i]}: ${r.value.forms.length} form(s), ${fieldCount} fields`, 'info');
-          if (fieldCount > bestFields) {
-            bestFields = fieldCount;
-            bestResult = r.value;
-            bestLabel = labels[i];
-          }
-        }
-
-        if (bestResult) {
-          log(`winner: ${bestLabel} strategy (${bestFields} fields)`, 'ok');
-          feResults.push({ url: page.url, forms: bestResult.forms, tier: 'ai' });
-        } else {
-          log('all strategies returned 0 forms', 'warn');
-          feResults.push({ url: page.url, forms: [], tier: 'ai' });
-        }
-
-        // Add iframe pages as separate entries if iframe strategy had forms and wasn't the winner
-        if (strategies.iframe && bestLabel !== 'iframe') {
-          const iframeResult = results[labels.indexOf('iframe')];
-          if (iframeResult?.status === 'fulfilled' && iframeResult.value?.forms?.length) {
-            feResults.push({ url: recon.iframeSrcs[0], forms: iframeResult.value.forms, tier: 'ai' });
-          }
-        }
+        feResults.push({ url: siteUrl, forms: [], tier: 'multi-step' });
       }
     }
+
+    // ── SINGLE-STEP MODE: proxy fetch ──
+    else {
+
+    log('fetching via proxy...', 'info');
+    setProgress(0, 1, 'fetching page...');
+    const page = await proxyFetch(siteUrl);
+    setProgress(1, 1, 'parsing...');
+    log(`fetched ${(page.html.length / 1024).toFixed(1)}KB HTML (via ${page.method})`, 'ok');
+
+    if (!page.html || page.html.length < 50) {
+      log('page HTML too short or empty', 'warn');
+      feResults.push({ url: siteUrl, forms: [], tier });
+    } else {
+      const recon = feReconPage(page.html);
+      log(`recon: ${recon.formCount} forms, ${recon.inputCount} inputs, plugins: ${recon.plugins.join(', ') || 'none'}`, 'info');
+
+      if (tier === 'basic') {
+        const result = feExtractDOM(page.html);
+        let fc = 0; for (const f of result.forms) fc += (f.fields||[]).length;
+        log(`DOM extracted: ${result.forms.length} form(s), ${fc} fields`, 'ok');
+        feResults.push({ url: siteUrl, forms: result.forms, tier: 'basic' });
+      } else {
+        log('running AI + DOM extraction in parallel...', 'info');
+        const [aiStd, aiRaw, dom] = await Promise.allSettled([
+          feAiExtract(siteUrl, page.html, 'standard'),
+          feAiExtract(siteUrl, page.html, 'raw'),
+          Promise.resolve(feExtractDOM(page.html))
+        ]);
+        const candidates = [{ label: 'ai-standard', result: aiStd }, { label: 'ai-raw', result: aiRaw }, { label: 'dom', result: dom }];
+        let bestResult = null, bestFields = -1, bestLabel = '';
+        for (const c of candidates) {
+          if (c.result.status !== 'fulfilled' || !c.result.value?.forms?.length) { if (c.result.status === 'rejected') log(`${c.label} failed: ${c.result.reason?.message||c.result.reason}`, 'warn'); continue; }
+          let fc = 0; for (const f of c.result.value.forms) fc += (f.fields||[]).length;
+          log(`${c.label}: ${c.result.value.forms.length} form(s), ${fc} fields`, 'info');
+          if (fc > bestFields) { bestFields = fc; bestResult = c.result.value; bestLabel = c.label; }
+        }
+        if (bestResult) { log(`winner: ${bestLabel} (${bestFields} fields)`, 'ok'); feResults.push({ url: siteUrl, forms: bestResult.forms, tier: 'ai' }); }
+        else { log('all strategies returned 0 forms', 'warn'); feResults.push({ url: siteUrl, forms: [], tier: 'ai' }); }
+      }
+    }
+    } // end single-step else
 
     if (feState === 'stopped') throw 'STOPPED';
-
-    // Render results
     feRenderResults(feResults);
-
-    let totalForms = 0, totalFields = 0;
-    for (const p of feResults) {
-      totalForms += (p.forms || []).length;
-      for (const f of (p.forms || [])) totalFields += (f.fields || []).length;
-    }
-    log(`Done \u00b7 ${totalForms} forms \u00b7 ${totalFields} fields \u00b7 ${feCreditsUsed} credits`, 'ok');
-
+    let tf = 0, tfi = 0;
+    for (const p of feResults) { tf += (p.forms||[]).length; for (const f of (p.forms||[])) tfi += (f.fields||[]).length; }
+    log(`Done \u00b7 ${tf} forms \u00b7 ${tfi} fields`, 'ok');
   } catch (e) {
-    if (e === 'STOPPED') {
-      log('extraction stopped by user', 'warn');
-      feRenderResults(feResults);
-    } else if (e === 'NO_URLS') {
-      $('feList').innerHTML = '<div class="empty">Failed to scrape page \u2014 check the URL</div>';
-    } else {
-      log('FATAL: ' + (e.message || e), 'err');
-    }
+    if (e === 'STOPPED') { log('stopped by user', 'warn'); feRenderResults(feResults); }
+    else log('FATAL: ' + (e.message || e), 'err');
   }
 
-  // Reset controls
-  feState = 'idle';
-  $('feLiveBadge').classList.remove('active');
-  let totalFormsFound = 0;
-  for (const p of feResults) totalFormsFound += (p.forms || []).length;
-  $('feLiveBadge').textContent = `${totalFormsFound} form${totalFormsFound !== 1 ? 's' : ''} found`;
-  hide('fePauseBtn'); hide('feStopBtn');
-  $('feBtn').disabled = false;
-  $('feBtn').textContent = 'Extract Forms \u2192';
+  feState = 'idle'; $('feLiveBadge').classList.remove('active');
+  let found = 0; for (const p of feResults) found += (p.forms||[]).length;
+  $('feLiveBadge').textContent = `${found} form${found!==1?'s':''} found`;
+  hide('feStopBtn'); $('feBtn').disabled = false; $('feBtn').textContent = 'Extract Forms \u2192';
 }
 
-// ─── FORM EXTRACTOR: CONTROLS ───────────────────────────────────
+function feStopExtraction() { feState = 'stopped'; $('feLiveBadge').classList.remove('active'); hide('feStopBtn'); log('stopped', 'warn'); }
 
-function feTogglePause() {
-  if (feState === 'scanning') {
-    feState = 'paused';
-    $('fePauseBtn').textContent = '\u25B6 Resume';
-    log('paused \u2014 click resume to continue', 'warn');
-  } else if (feState === 'paused') {
-    feState = 'scanning';
-    $('fePauseBtn').textContent = '\u23F8 Pause';
-    log('resumed', 'ok');
+// ─── FORM FILLER ───────────────────────────────────────────────
+
+function parseCsvLine(line) {
+  const result = []; let current = '', inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) { if (ch === '"' && line[i+1] === '"') { current += '"'; i++; } else if (ch === '"') inQuotes = false; else current += ch; }
+    else { if (ch === '"') inQuotes = true; else if (ch === ',') { result.push(current.trim()); current = ''; } else current += ch; }
   }
+  result.push(current.trim());
+  return result;
 }
 
-function feStopExtraction() {
-  feState = 'stopped';
-  $('feLiveBadge').classList.remove('active');
-  let totalFormsFound = 0;
-  for (const p of feResults) totalFormsFound += (p.forms || []).length;
-  $('feLiveBadge').textContent = `${totalFormsFound} form${totalFormsFound !== 1 ? 's' : ''} found`;
-  hide('fePauseBtn'); hide('feStopBtn');
-  log('stopped by user', 'warn');
-}
+$('ffCsvInput').addEventListener('change', function() {
+  const files = Array.from(this.files);
+  if (!files.length) return;
 
-// ─── VULN SCANNER FUNCTIONS ──────────────────────────────────────
+  let loaded = 0;
+  for (const file of files) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const text = e.target.result;
+      const lines = text.trim().split('\n');
+      if (lines.length < 2) { alert(`${file.name}: needs a header + at least one data row.`); return; }
+      const headers = parseCsvLine(lines[0]);
+      let rowCount = 0;
+      for (let i = 1; i < lines.length; i++) { if (lines[i].trim()) rowCount++; }
 
-async function vsUploadPdf() {
-  const input = $('vsPdfInput');
-  const file = input.files[0];
-  if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { alert('PDF must be under 5MB'); return; }
+      // Detect URL from first data row's first column
+      const firstVals = parseCsvLine(lines[1]);
+      const url = (firstVals[0] || '').trim();
+      const hasUrl = url.startsWith('http');
 
-  const form = new FormData();
-  form.append('file', file);
-  try {
-    const res = await fetch('/vulnscan/upload', { method: 'POST', body: form });
-    const data = await res.json();
-    if (data.ok) {
-      vsPdfReady = true;
-      const drop = $('vsPdfDrop');
-      drop.classList.add('uploaded');
-      drop.textContent = '\u2713 ' + data.filename + ' (' + (data.size / 1024).toFixed(1) + 'KB)';
-      show('logSection');
-      log('PDF uploaded: ' + data.filename + ' (' + data.size + ' bytes)', 'ok');
-    } else {
-      alert(data.error || 'Upload failed');
-    }
-  } catch (e) {
-    alert('Upload failed: ' + e.message);
+      ffJobs.push({ name: file.name, csvText: text, rowCount, url: hasUrl ? url : '', hasUrlCol: hasUrl });
+
+      loaded++;
+      if (loaded === files.length) ffUpdateFileList();
+    };
+    reader.readAsText(file);
   }
+  this.value = ''; // allow re-selecting same files
+});
+
+function ffUpdateFileList() {
+  ffTotalRows = 0;
+  for (const j of ffJobs) ffTotalRows += j.rowCount;
+
+  $('ffFileName').textContent = `${ffJobs.length} file${ffJobs.length !== 1 ? 's' : ''} \u00b7 ${ffTotalRows} total rows`;
+
+  const list = $('ffFileList');
+  let html = '';
+  for (let i = 0; i < ffJobs.length; i++) {
+    const j = ffJobs[i];
+    const urlPart = j.hasUrlCol
+      ? `<span style="color:var(--pink2);font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(j.url)}">${esc(j.url.substring(0,50))}</span>`
+      : `<input type="text" id="ffJobUrl${i}" value="${esc(j.url)}" placeholder="https://..." onchange="ffJobs[${i}].url=this.value" style="font-family:var(--mono);font-size:11px;padding:4px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--pink2);width:200px;">`;
+    html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;font-family:var(--mono);font-size:12px;">
+      <span style="color:var(--pink)">${i + 1}.</span>
+      <span style="color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(j.name)}">${esc(j.name)}</span>
+      <span style="color:var(--hint);">${j.rowCount} rows</span>
+      ${urlPart}
+      <button onclick="ffJobs.splice(${i},1);ffUpdateFileList();" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px 6px;" title="Remove">&times;</button>
+    </div>`;
+  }
+  list.innerHTML = html;
+
+  hide('ffPreview'); // hide old single-file preview
+  $('ffStartBtn').disabled = ffJobs.length === 0;
+  $('ffStartBtn').textContent = ffJobs.length ? `Start Filling (${ffTotalRows} rows) \u2192` : 'Start Filling \u2192';
 }
 
-async function vsTestSite(url) {
-  const timeout = parseFloat($('vsTimeout').value) || 10;
-  const delay = parseFloat($('vsDelay').value) || 0.5;
-  const res = await fetch('/vulnscan/test', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, timeout, delay,
-      ai_key: $('aiKey').value.trim(),
-      oai_key: $('oaiKey').value.trim(),
-      model: $('modelSelect').value
-    })
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'HTTP ' + res.status }));
-    // Return crash info as a result card so debug log is visible
-    if (err.traceback || err._debug) {
-      return {
-        site: url, cms: 'unknown', checks_run: 0, ai_used: false,
-        plugins_discovered: 0,
-        _debug: (err._debug || []).concat(err.traceback ? ['CRASH:\n' + err.traceback] : []),
-        results: [{ vector: 'crash', name: 'Scan Crashed', status: 'error',
-                     detail: err.error + (err.traceback ? ' — see debug log' : '') }]
-      };
-    }
-    throw new Error(err.error || 'HTTP ' + res.status);
-  }
-  return res.json();
-}
+// Build round-robin schedule: [{jobIdx, rowIdx}]
+// row 0 of each job, then row 1 of each, etc.
+let ffSchedule = [];
+let ffSchedulePos = 0;
+let ffLastJobIdx = -1; // track which job is currently loaded in backend
 
-function vsAddResultCard(result) {
-  const list = $('vsList');
-  const vulnChecks = result.results.filter(r => r.status === 'vulnerable');
-  const errChecks = result.results.filter(r => r.status === 'error');
-  const isVuln = vulnChecks.length > 0;
-  const rowClass = isVuln ? 'vuln' : errChecks.length > 0 && !isVuln ? 'error' : 'safe';
-
-  const card = document.createElement('div');
-  card.className = 'vs-row ' + rowClass;
-
-  const cmsBadge = result.cms !== 'unknown'
-    ? '<span class="badge b-info">' + esc(result.cms) + '</span>' : '';
-  const aiBadge = result.ai_used
-    ? '<span class="badge b-green">AI enhanced</span>' : '';
-  const pluginsBadge = result.plugins_discovered
-    ? '<span class="badge b-info">' + result.plugins_discovered + ' plugins</span>' : '';
-  const statusBadge = isVuln
-    ? '<span class="badge b-high">VULNERABLE (' + vulnChecks.length + ')</span>'
-    : '<span class="badge b-green">SAFE</span>';
-  const checksBadge = '<span class="badge b-low">' + result.checks_run + ' checks</span>';
-
-  let tableRows = '';
-  for (const r of result.results) {
-    const styCls = r.status === 'vulnerable' ? 'color:var(--red);font-weight:600'
-      : r.status === 'error' ? 'color:var(--amber)' : 'color:var(--green)';
-    const link = r.upload_url
-      ? ' <a href="' + esc(r.upload_url) + '" target="_blank" style="color:var(--pink2)">\u2197</a>' : '';
-    tableRows += '<tr><td>' + esc(r.vector) + '</td><td>' + esc(r.name) +
-      '</td><td style="' + styCls + '">' + esc(r.status.toUpperCase()) +
-      '</td><td>' + esc(r.detail) + link + '</td></tr>';
-  }
-
-  let debugHtml = '';
-  if (result._debug && result._debug.length) {
-    debugHtml = '<details style="margin-top:8px;font-size:12px;opacity:0.7"><summary>Debug log (' +
-      result._debug.length + ' entries)</summary><pre style="white-space:pre-wrap;max-height:300px;overflow:auto;padding:8px;background:rgba(0,0,0,0.3);border-radius:4px;margin-top:4px">' +
-      result._debug.map(d => esc(d)).join('\n') + '</pre></details>';
-  }
-
-  card.innerHTML =
-    '<div class="vs-row-header" onclick="this.parentElement.classList.toggle(\'open\')">' +
-      '<span class="vs-row-url">' + esc(result.site) + '</span>' +
-      '<div class="vs-row-badges">' + cmsBadge + aiBadge + pluginsBadge + statusBadge + checksBadge + '</div>' +
-      '<span class="vs-row-arrow">\u25BC</span>' +
-    '</div>' +
-    '<div class="vs-row-body">' +
-      '<table class="fe-table"><thead><tr><th>Vector</th><th>Check</th><th>Status</th><th>Detail</th></tr></thead>' +
-      '<tbody>' + tableRows + '</tbody></table>' +
-      debugHtml +
-    '</div>';
-
-  list.appendChild(card);
-}
-
-function vsUpdateSummary() {
-  let vulnCount = 0, safeCount = 0;
-  for (const r of vsResults) {
-    if (r.results.some(c => c.status === 'vulnerable')) vulnCount++;
-    else safeCount++;
-  }
-  $('vsSummary').innerHTML =
-    '<span class="vuln-count">' + vulnCount + ' vulnerable</span> \u00b7 ' +
-    '<span class="safe-count">' + safeCount + ' safe</span> \u00b7 ' +
-    '<span class="tested-count">' + vsResults.length + ' tested</span>';
-  $('vsCount').textContent = '(' + vsResults.length + ' sites)';
-}
-
-async function runVulnScan() {
-  if (!vsPdfReady) { alert('Upload a dummy PDF first.'); return; }
-  const raw = $('vsUrls').value.trim();
-  if (!raw) { alert('Enter at least one URL.'); return; }
-
-  const urls = raw.split('\n').map(u => u.trim()).filter(u => u && u.startsWith('http'));
-  if (!urls.length) { alert('Enter valid URLs starting with http:// or https://'); return; }
-
-  vsState = 'scanning';
-  vsResults = [];
-
-  $('vsBtn').disabled = true;
-  $('vsBtn').textContent = 'Scanning...';
-  show('vsPauseBtn'); show('vsStopBtn'); show('vsLiveBadge');
-  $('vsLiveBadge').textContent = 'scanning...';
-  $('vsLiveBadge').classList.add('active');
-  $('vsPauseBtn').textContent = '\u23F8 Pause';
-  $('logBox').innerHTML = '';
-  $('vsList').innerHTML = '';
-  $('vsCount').textContent = '';
-  $('vsSummary').innerHTML = '';
-  show('logSection'); show('vsResultSection');
-  show('pWrap');
-
-  log('vuln scan: ' + urls.length + ' site(s)', 'info');
-
-  for (let i = 0; i < urls.length; i++) {
-    if (vsState === 'stopped') break;
-    while (vsState === 'paused') await sleep(400);
-
-    const url = urls[i];
-    let host = url;
-    try { host = new URL(url).hostname; } catch {}
-    setProgress(i + 1, urls.length, 'testing ' + (i + 1) + '/' + urls.length + ' \u00b7 ' + host);
-    log('testing: ' + url, 'info');
-
-    try {
-      const result = await vsTestSite(url);
-      vsResults.push(result);
-      vsAddResultCard(result);
-      vsUpdateSummary();
-
-      const vulns = result.results.filter(r => r.status === 'vulnerable');
-      const aiTag = result.ai_used ? '[AI] ' : '';
-      if (vulns.length > 0) {
-        log(aiTag + 'VULNERABLE \u00b7 ' + url + ' \u00b7 ' + vulns.length + ' vector(s)', 'err');
-      } else {
-        log(aiTag + 'safe \u00b7 ' + url + ' \u00b7 ' + result.checks_run + ' checks passed', 'ok');
+function ffBuildSchedule() {
+  ffSchedule = [];
+  const maxRows = Math.max(...ffJobs.map(j => j.rowCount));
+  for (let r = 0; r < maxRows; r++) {
+    for (let j = 0; j < ffJobs.length; j++) {
+      if (r < ffJobs[j].rowCount) {
+        ffSchedule.push({ jobIdx: j, rowIdx: r });
       }
-    } catch (e) {
-      log('error testing ' + url + ': ' + e.message, 'err');
-      const errResult = {
-        site: url, cms: 'unknown', checks_run: 0,
-        results: [{ vector: 'connection', name: 'Connection', status: 'error', detail: e.message }]
-      };
-      vsResults.push(errResult);
-      vsAddResultCard(errResult);
-      vsUpdateSummary();
-    }
-
-    if (i < urls.length - 1) await sleep(1000);
-  }
-
-  vsState = 'idle';
-  $('vsLiveBadge').classList.remove('active');
-  let totalVuln = vsResults.filter(r => r.results.some(c => c.status === 'vulnerable')).length;
-  $('vsLiveBadge').textContent = totalVuln + ' vulnerable / ' + vsResults.length + ' tested';
-  hide('vsPauseBtn'); hide('vsStopBtn');
-  $('vsBtn').disabled = false;
-  $('vsBtn').textContent = 'Run Vuln Scan \u2192';
-  hide('pWrap');
-  log('scan complete \u00b7 ' + totalVuln + ' vulnerable / ' + vsResults.length + ' tested', 'ok');
-}
-
-function vsTogglePause() {
-  if (vsState === 'scanning') {
-    vsState = 'paused';
-    $('vsPauseBtn').textContent = '\u25B6 Resume';
-    log('paused', 'warn');
-  } else if (vsState === 'paused') {
-    vsState = 'scanning';
-    $('vsPauseBtn').textContent = '\u23F8 Pause';
-    log('resumed', 'ok');
-  }
-}
-
-function vsStopScan() {
-  vsState = 'stopped';
-  $('vsLiveBadge').classList.remove('active');
-  let totalVuln = vsResults.filter(r => r.results.some(c => c.status === 'vulnerable')).length;
-  $('vsLiveBadge').textContent = totalVuln + ' vulnerable / ' + vsResults.length + ' tested';
-  hide('vsPauseBtn'); hide('vsStopBtn');
-  log('stopped by user', 'warn');
-}
-
-function vsExportJson() {
-  if (!vsResults.length) return;
-  const date = new Date().toISOString().split('T')[0];
-  const data = { scanned_at: date, sites: vsResults };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'vulnscan-' + date + '.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-function vsExportCsv() {
-  if (!vsResults.length) return;
-  const date = new Date().toISOString().split('T')[0];
-  const rows = [['Site', 'CMS', 'Vector', 'Check Name', 'Status', 'Detail', 'Upload URL']];
-  for (const site of vsResults) {
-    for (const r of site.results) {
-      rows.push([site.site, site.cms, r.vector, r.name, r.status, r.detail, r.upload_url || '']);
     }
   }
-  const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'vulnscan-' + date + '.csv';
-  a.click();
-  URL.revokeObjectURL(a.href);
 }
 
-// ─── UPLOAD PDF FUNCTIONS ─────────────────────────────────────────
-
-function switchUploadMode(umode) {
-  uploadMode = umode;
-  for (const btn of document.querySelectorAll('#uploadModeSwitcher .tier-btn')) {
-    btn.classList.toggle('active', btn.dataset.umode === umode);
+// Extract a single-row CSV from a job at a given row index
+function ffGetSingleRowCsv(jobIdx, rowIdx) {
+  const job = ffJobs[jobIdx];
+  const lines = job.csvText.trim().split('\n');
+  const header = lines[0];
+  let dataRowNum = 0;
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    if (dataRowNum === rowIdx) return header + '\n' + lines[i];
+    dataRowNum++;
   }
-  const hints = {
-    auto: 'Parses spammer URL \u2192 identifies plugin \u2192 uploads directly (no AI needed)',
-    form_page: 'AI analyzes the page HTML to detect form fields, CMS, and upload action URL',
-    direct: 'Tries common field names and bypass techniques on the endpoint directly'
-  };
-  const labels = {
-    auto: 'Spammer URL <span class="req">required</span>',
-    form_page: 'Form Page URL <span class="req">required</span>',
-    direct: 'Direct Endpoint URL <span class="req">required</span>'
-  };
-  const placeholders = {
-    auto: 'https://example.com/wp-content/uploads/ninja-forms/29/spam.pdf',
-    form_page: 'https://target-site.com/upload-page',
-    direct: 'https://target-site.com/wp-admin/admin-ajax.php'
-  };
-  $('uploadModeHint').textContent = hints[umode];
-  $('uploadUrlLabel').innerHTML = labels[umode];
-  $('uploadUrl').placeholder = placeholders[umode];
+  return null;
 }
 
-function uploadPdfPicked() {
-  const input = $('uploadPdfInput');
-  if (input.files.length) {
-    uploadPdfFile = input.files[0];
-    const drop = $('uploadPdfDrop');
-    drop.textContent = '\u2705 ' + uploadPdfFile.name + ' (' + (uploadPdfFile.size / 1024).toFixed(1) + ' KB)';
-    drop.classList.add('uploaded');
+async function ffFillStep(pos) {
+  if (pos >= ffSchedule.length) {
+    ffLog(`Done \u2014 all ${ffSchedule.length} rows completed`, 'ok');
+    $('ffLiveBadge').classList.remove('active'); $('ffLiveBadge').textContent = 'completed';
+    hide('ffNextBtn'); hide('ffStopBtn'); show('ffStartBtn'); show('ffResultsBtn');
+    $('ffStartBtn').disabled = false; $('ffStartBtn').textContent = `Start Filling (${ffTotalRows} rows) \u2192`;
+    $('ffStatus').innerHTML = '<span class="count">All rows completed</span>';
+    ffActive = false;
+    return;
   }
-}
 
-async function runPdfUpload() {
-  const url = $('uploadUrl').value.trim();
-  if (!url) { alert('Enter a target URL'); return; }
-  if (!url.startsWith('http://') && !url.startsWith('https://')) { alert('URL must start with http:// or https://'); return; }
-  if (!uploadPdfFile) { alert('Select a PDF file first'); return; }
+  const step = ffSchedule[pos];
+  const job = ffJobs[step.jobIdx];
+  const csvRow = ffGetSingleRowCsv(step.jobIdx, step.rowIdx);
 
-  const aiKey = $('aiKey').value.trim();
-  const oaiKey = $('oaiKey').value.trim();
-  const model = $('modelSelect').value;
+  if (!csvRow) {
+    ffLog(`Error: could not read row ${step.rowIdx} from ${job.name}`, 'err');
+    return;
+  }
 
-  $('uploadBtn').disabled = true;
-  show('uploadLiveBadge');
-  $('uploadLiveBadge').classList.add('active');
-  show('logSection');
-  log('starting PDF upload to ' + url, 'info');
-
-  // Reset results
-  hide('uploadResultSection');
-  hide('uploadVerifiedBox');
-  hide('uploadPartialBox');
-  hide('uploadFailBox');
-  hide('uploadAnalysis');
-  $('uploadTechniquesList').innerHTML = '';
-
+  // Always call /filler/start with the single-row CSV — backend opens/navigates browser
   try {
-    const formData = new FormData();
-    formData.append('target_url', url);
-    formData.append('mode', uploadMode);
-    formData.append('pdf', uploadPdfFile);
-    formData.append('ai_key', aiKey);
-    formData.append('oai_key', oaiKey);
-    formData.append('ai_model', model);
+    const res = await fetch('/filler/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        csv_data: csvRow,
+        url: job.url || '',
+        ai_key: $('aiKey').value.trim(),
+        oai_key: $('oaiKey').value.trim(),
+        ai_model: $('modelSelect').value
+      })
+    });
+    const data = await res.json();
+    if (data.error) { ffLog('Error: ' + data.error, 'err'); return; }
 
-    log('sending to backend...', 'info');
-    const resp = await fetch('/upload-pdf', { method: 'POST', body: formData });
-    const data = await resp.json();
+    const siteChanged = step.jobIdx !== ffLastJobIdx;
+    ffLastJobIdx = step.jobIdx;
 
-    show('uploadResultSection');
+    if (siteChanged) ffLog(`\u2192 ${job.name}`, 'info');
 
-    if (data.error) {
-      log('error: ' + data.error, 'err');
-      show('uploadFailBox');
-      $('uploadFailMsg').textContent = data.error;
-      $('uploadBtn').disabled = false;
-      hide('uploadLiveBadge');
+    $('ffLiveBadge').textContent = `${pos + 1}/${ffSchedule.length}`;
+    ffLog(`[${pos+1}/${ffSchedule.length}] ${job.name} row ${step.rowIdx+1}: ${(data.filled||[]).length} fields filled`, 'ok');
+    if (data.errors?.length) for (const err of data.errors) ffLog(err, 'warn');
+    ffLog('Review and submit, then click "Next Row"', 'info');
+    $('ffStatus').innerHTML = `<span class="count">${pos+1}</span> of <span class="count">${ffSchedule.length}</span> &middot; ${esc(job.name)} row ${step.rowIdx+1}`;
+
+    ffResultsData.push({
+      row: pos + 1,
+      url: data.url || job.url,
+      site: job.name,
+      siteRow: step.rowIdx + 1,
+      status: 'filled',
+      timestamp: new Date().toLocaleTimeString('en-GB', { hour12: false })
+    });
+
+  } catch (e) { ffLog('Failed: ' + e.message, 'err'); }
+}
+
+async function ffStart() {
+  if (!ffJobs.length) { alert('Add CSV files first.'); return; }
+  // Validate all jobs have URLs
+  for (let i = 0; i < ffJobs.length; i++) {
+    if (!ffJobs[i].url || !ffJobs[i].url.startsWith('http')) {
+      alert(`File "${ffJobs[i].name}" has no URL. Enter the form page URL next to it.`);
       return;
     }
-
-    // Show auto-upload parsed info
-    if (data.auto_info) {
-      show('uploadAnalysis');
-      let html = '<div><span style="color:var(--pink)">CMS:</span> ' + esc(data.auto_info.cms) + '</div>';
-      html += '<div><span style="color:var(--pink)">Plugin:</span> ' + esc(data.auto_info.plugin) + '</div>';
-      html += '<div><span style="color:var(--pink)">Endpoints tried:</span> ' + data.auto_info.endpoints_tried + '</div>';
-      $('uploadAnalysisContent').innerHTML = html;
-    } else if (data.analysis) {
-      show('uploadAnalysis');
-      const a = data.analysis;
-      let html = '';
-      if (a.technology) html += '<div><span style="color:var(--pink)">Technology:</span> ' + esc(a.technology) + '</div>';
-      if (a.action_url) html += '<div><span style="color:var(--pink)">Action URL:</span> ' + esc(a.action_url) + '</div>';
-      if (a.upload_field) html += '<div><span style="color:var(--pink)">Upload Field:</span> ' + esc(a.upload_field) + '</div>';
-      if (a.extra_fields && Object.keys(a.extra_fields).length) {
-        html += '<div><span style="color:var(--pink)">Extra Fields:</span> ' + esc(JSON.stringify(a.extra_fields)) + '</div>';
-      }
-      $('uploadAnalysisContent').innerHTML = html;
-    }
-
-    // Show techniques table
-    if (data.techniques && data.techniques.length) {
-      let successCount = 0;
-      let thtml = '';
-      for (const t of data.techniques) {
-        const cls = t.success ? 'b-green' : (t.http_status >= 400 ? 'b-high' : 'b-low');
-        const label = t.success ? 'SUCCESS' : (t.http_status === 0 ? 'FAILED' : 'HTTP ' + t.http_status);
-        if (t.success) successCount++;
-        thtml += '<div class="vs-row' + (t.success ? ' vuln' : ' safe') + '" style="margin-bottom:8px;">';
-        thtml += '<div class="vs-row-header" onclick="this.parentElement.classList.toggle(\'open\')">';
-        thtml += '<span class="vs-row-url">' + esc(t.name) + '</span>';
-        thtml += '<span class="badge ' + cls + '">' + label + '</span>';
-        if (t.upload_url) thtml += '<span class="badge b-green">URL found</span>';
-        thtml += '<span class="vs-row-arrow">\u25BC</span>';
-        thtml += '</div>';
-        thtml += '<div class="vs-row-body"><div style="font-family:var(--mono);font-size:13px;color:var(--muted);word-break:break-all;">';
-        if (t.response_snippet) thtml += '<div style="margin-bottom:8px;">' + esc(t.response_snippet.substring(0, 500)) + '</div>';
-        if (t.upload_url) thtml += '<div style="color:var(--green)">Upload URL: ' + esc(t.upload_url) + '</div>';
-        thtml += '</div></div></div>';
-      }
-      $('uploadTechniquesList').innerHTML = thtml;
-      $('uploadCount').textContent = successCount + '/' + data.techniques.length + ' techniques succeeded';
-      log(successCount + ' of ' + data.techniques.length + ' bypass techniques succeeded', successCount > 0 ? 'ok' : 'warn');
-    }
-
-    // Show verified URL, partial (unverified) URL, or failure
-    if (data.success && data.verified_url) {
-      show('uploadVerifiedBox');
-      $('uploadVerifiedLink').href = data.verified_url;
-      $('uploadVerifiedLink').textContent = data.verified_url;
-      log('PDF uploaded successfully! Verified at: ' + data.verified_url, 'ok');
-    } else if (data.partial && data.best_url) {
-      show('uploadPartialBox');
-      $('uploadPartialLink').href = data.best_url;
-      $('uploadPartialLink').textContent = data.best_url;
-      log('upload returned a URL but could not verify PDF: ' + data.best_url, 'warn');
-    } else {
-      show('uploadFailBox');
-      $('uploadFailMsg').textContent = data.fail_reason || 'All bypass techniques failed. The endpoint may require authentication or does not accept uploads.';
-      log('upload failed — no technique succeeded', 'err');
-    }
-
-  } catch (err) {
-    log('upload error: ' + err.message, 'err');
-    show('uploadResultSection');
-    show('uploadFailBox');
-    $('uploadFailMsg').textContent = 'Network error: ' + err.message;
   }
+  ffBuildSchedule();
+  ffSchedulePos = 0;
+  ffLastJobIdx = -1;
+  ffCompletedRows = 0;
+  ffResultsData = [];
 
-  $('uploadBtn').disabled = false;
-  hide('uploadLiveBadge');
+  $('ffStartBtn').disabled = true; $('ffStartBtn').textContent = 'Starting...';
+  show('ffStatusCard'); $('ffLogBox').innerHTML = '';
+  ffLog(`Starting: ${ffJobs.length} sites, ${ffSchedule.length} rows (round-robin)`, 'info');
+  for (const j of ffJobs) ffLog(`  ${j.name}: ${j.rowCount} rows`, 'info');
+
+  ffActive = true; hide('ffStartBtn'); show('ffNextBtn'); show('ffStopBtn'); show('ffLiveBadge');
+  $('ffLiveBadge').classList.add('active');
+
+  await ffFillStep(0);
 }
 
-// ─── UI CONTROLS ────────────────────────────────────────────────
+async function ffNext() {
+  $('ffNextBtn').disabled = true; $('ffNextBtn').textContent = 'Loading...';
 
-function togglePause() {
-  if (scanState === 'scanning') {
-    scanState = 'paused';
-    $('pauseBtn').textContent = '\u25B6 Resume';
-    log('paused \u2014 click resume to continue', 'warn');
-  } else if (scanState === 'paused') {
-    scanState = 'scanning';
-    $('pauseBtn').textContent = '\u23F8 Pause';
-    log('resumed', 'ok');
+  // Mark previous as submitted
+  if (ffResultsData.length) ffResultsData[ffResultsData.length - 1].status = 'submitted';
+
+  ffSchedulePos++;
+  await ffFillStep(ffSchedulePos);
+
+  // Only re-enable if session is still active (ffFillStep may have ended it)
+  if (ffActive) {
+    $('ffNextBtn').disabled = false; $('ffNextBtn').textContent = 'Next Row \u2192';
   }
 }
 
-function stopScan() {
-  scanState = 'stopped';
-  $('liveBadge').textContent = `${exploitCount} exploit page${exploitCount !== 1 ? 's' : ''} found`;
-  $('liveBadge').classList.remove('active');
-  hide('pauseBtn'); hide('stopBtn');
-  log('stopped by user', 'warn');
+async function ffStop() {
+  try { await fetch('/filler/stop', { method: 'POST' }); } catch {}
+  if (ffResultsData.length) show('ffResultsBtn');
+  ffLog('Session stopped', 'warn'); ffActive = false;
+  $('ffLiveBadge').classList.remove('active'); $('ffLiveBadge').textContent = 'stopped';
+  hide('ffNextBtn'); hide('ffStopBtn'); show('ffStartBtn');
+  $('ffStartBtn').disabled = false; $('ffStartBtn').textContent = `Start Filling (${ffTotalRows} rows) \u2192`;
 }
 
-// ─── INIT ───────────────────────────────────────────────────────
+function ffDownloadResults() {
+  if (!ffResultsData.length) return;
+  const rows = [['#', 'Site', 'Site Row', 'URL', 'Status', 'Time']];
+  for (const r of ffResultsData) rows.push([r.row, r.site, r.siteRow, r.url, r.status, r.timestamp]);
+  const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
+  const date = new Date().toISOString().split('T')[0];
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = `filler-results-${date}.csv`;
+  a.click();
+}
 
-(function init() {
-  // Load saved keys + model + tier
-  const savedAI = localStorage.getItem('bg_aiKey');
-  const savedOAI = localStorage.getItem('bg_oaiKey');
-  const savedFC = localStorage.getItem('bg_fcKey');
-  const savedModel = localStorage.getItem('bg_model');
-  const savedTier = localStorage.getItem('bg_tier');
-  if (savedAI) $('aiKey').value = savedAI;
-  if (savedOAI) $('oaiKey').value = savedOAI;
-  if (savedFC) $('fcKey').value = savedFC;
-  if (savedModel) $('modelSelect').value = savedModel;
-  if (savedTier) switchTier(savedTier);
+// ─── TAB / TIER SWITCHING ──────────────────────────────────────
 
-  // Scanner event listeners
-  $('scanBtn').addEventListener('click', runScan);
-  $('pauseBtn').addEventListener('click', togglePause);
-  $('stopBtn').addEventListener('click', stopScan);
-  $('estimateBtn').addEventListener('click', estimatePages);
-  $('reAnalyzeBtn').addEventListener('click', reAnalyzeWithAI);
-  $('urlInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter' && scanState === 'idle') runScan();
-  });
+function switchTab(tab) {
+  currentTab = tab;
+  $('tabExtractor').className = tab === 'extractor' ? 'tab-btn active' : 'tab-btn';
+  $('tabFiller').className = tab === 'filler' ? 'tab-btn active' : 'tab-btn';
+  if (tab === 'extractor') { show('extractorTab'); hide('fillerTab'); }
+  else { hide('extractorTab'); show('fillerTab'); }
+}
 
-  // Form Extractor event listeners
+function switchTier(tier) {
+  currentTier = tier;
+  document.querySelectorAll('#tierSwitcher .tier-btn').forEach(b => b.className = b.dataset.tier === tier ? 'tier-btn active' : 'tier-btn');
+  $('tierHint').textContent = tier === 'basic' ? 'DOM-only extraction \u2014 no API keys needed' : 'AI-powered extraction \u2014 handles JS-rendered forms + ambiguous HTML';
+}
+
+function switchFeMode(mode) {
+  feMode = mode;
+  document.querySelectorAll('#feModeSwitcher .tier-btn').forEach(b => b.className = b.dataset.femode === mode ? 'tier-btn active' : 'tier-btn');
+  $('feModeHint').textContent = mode === 'single'
+    ? 'Extracts fields from a single-page form'
+    : 'Opens browser, clicks through all form steps, extracts every field across all pages';
+}
+
+// ─── INIT ──────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  $('aiKey').value = localStorage.getItem('bg_aiKey') || '';
+  $('oaiKey').value = localStorage.getItem('bg_oaiKey') || '';
+  const sm = localStorage.getItem('bg_model'); if (sm) $('modelSelect').value = sm;
+
+  $('tabExtractor').addEventListener('click', () => switchTab('extractor'));
+  $('tabFiller').addEventListener('click', () => switchTab('filler'));
+  document.querySelectorAll('#tierSwitcher .tier-btn').forEach(b => b.addEventListener('click', () => switchTier(b.dataset.tier)));
+  document.querySelectorAll('#feModeSwitcher .tier-btn').forEach(b => b.addEventListener('click', () => switchFeMode(b.dataset.femode)));
   $('feBtn').addEventListener('click', runFormExtraction);
-  $('fePauseBtn').addEventListener('click', feTogglePause);
-  $('feStopBtn').addEventListener('click', feStopExtraction);
-  $('feExportJsonBtn').addEventListener('click', feExportJson);
-  $('feExportCsvBtn').addEventListener('click', feExportCsv);
-  $('feUrl').addEventListener('keydown', e => {
-    if (e.key === 'Enter' && feState === 'idle') runFormExtraction();
-  });
-
-  // Mode switcher
-  $('modeScanner').addEventListener('click', () => switchMode('scanner'));
-  $('modeExtractor').addEventListener('click', () => switchMode('extractor'));
-  $('modeVuln').addEventListener('click', () => switchMode('vuln'));
-  $('modeUpload').addEventListener('click', () => switchMode('upload'));
-
-  // Upload PDF event listeners
-  $('uploadPdfInput').addEventListener('change', uploadPdfPicked);
-  $('uploadBtn').addEventListener('click', runPdfUpload);
-  $('uploadCopyBtn').addEventListener('click', () => {
-    const url = $('uploadVerifiedLink').textContent;
-    navigator.clipboard.writeText(url).then(() => {
-      $('uploadCopyBtn').textContent = 'Copied!';
-      setTimeout(() => { $('uploadCopyBtn').textContent = 'Copy URL'; }, 2000);
-    });
-  });
-  $('uploadPartialCopyBtn').addEventListener('click', () => {
-    const url = $('uploadPartialLink').textContent;
-    navigator.clipboard.writeText(url).then(() => {
-      $('uploadPartialCopyBtn').textContent = 'Copied!';
-      setTimeout(() => { $('uploadPartialCopyBtn').textContent = 'Copy URL'; }, 2000);
-    });
-  });
-  // Upload mode switcher
-  for (const btn of document.querySelectorAll('#uploadModeSwitcher .tier-btn')) {
-    btn.addEventListener('click', () => switchUploadMode(btn.dataset.umode));
-  }
-  // Drag-drop for Upload PDF
-  const upDrop = $('uploadPdfDrop');
-  upDrop.addEventListener('dragover', e => { e.preventDefault(); upDrop.classList.add('dragover'); });
-  upDrop.addEventListener('dragleave', () => upDrop.classList.remove('dragover'));
-  upDrop.addEventListener('drop', e => {
-    e.preventDefault();
-    upDrop.classList.remove('dragover');
-    const files = e.dataTransfer.files;
-    if (files.length && files[0].name.toLowerCase().endsWith('.pdf')) {
-      const dt = new DataTransfer();
-      dt.items.add(files[0]);
-      $('uploadPdfInput').files = dt.files;
-      uploadPdfPicked();
-    }
-  });
-
-  // Vuln Scanner event listeners
-  $('vsPdfInput').addEventListener('change', vsUploadPdf);
-  $('vsBtn').addEventListener('click', runVulnScan);
-  $('vsPauseBtn').addEventListener('click', vsTogglePause);
-  $('vsStopBtn').addEventListener('click', vsStopScan);
-  $('vsExportJsonBtn').addEventListener('click', vsExportJson);
-  $('vsExportCsvBtn').addEventListener('click', vsExportCsv);
-
-  // Drag-drop for PDF
-  const vsDrop = $('vsPdfDrop');
-  vsDrop.addEventListener('dragover', e => { e.preventDefault(); vsDrop.classList.add('dragover'); });
-  vsDrop.addEventListener('dragleave', () => vsDrop.classList.remove('dragover'));
-  vsDrop.addEventListener('drop', e => {
-    e.preventDefault();
-    vsDrop.classList.remove('dragover');
-    const files = e.dataTransfer.files;
-    if (files.length && files[0].name.toLowerCase().endsWith('.pdf')) {
-      const dt = new DataTransfer();
-      dt.items.add(files[0]);
-      $('vsPdfInput').files = dt.files;
-      vsUploadPdf();
-    }
-  });
-
-  // Tier switcher (extractor only)
-  for (const btn of document.querySelectorAll('#tierSwitcher .tier-btn')) {
-    btn.addEventListener('click', () => switchTier(btn.dataset.tier));
-  }
-
-  // Status bar: check on key change (debounced)
+  $('ffStartBtn').addEventListener('click', ffStart);
+  $('ffNextBtn').addEventListener('click', ffNext);
+  $('ffStopBtn').addEventListener('click', ffStop);
   $('aiKey').addEventListener('input', scheduleStatusCheck);
   $('oaiKey').addEventListener('input', scheduleStatusCheck);
-  $('fcKey').addEventListener('input', scheduleStatusCheck);
-  $('modelSelect').addEventListener('change', () => { updateKeyLabels(); scheduleStatusCheck(); });
-
-  // Status bar: auto-check every 30 seconds
-  statusTimer = setInterval(checkStatus, 30000);
-
-  // Initial status check after brief delay
-  setTimeout(checkStatus, 500);
-})();
+  checkStatus();
+});
 </script>
 </body>
 </html>
