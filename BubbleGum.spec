@@ -1,10 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 a = Analysis(
-    ['bubblegum_app.py'],
+    ['bubblegum_launcher.py'],
     pathex=[],
     binaries=[],
     datas=[
+        ('bubblegum_app.py', '.'),
         ('bubblegum.html', '.'),
         ('bubblegum.ico', '.'),
     ],
@@ -50,6 +51,9 @@ a = Analysis(
         'websocket._exceptions',
         'websocket._logging',
         'websocket._cookiejar',
+        # Stdlib needed by exec'd code
+        'csv',
+        'http.server',
     ],
     hookspath=[],
     hooksconfig={},

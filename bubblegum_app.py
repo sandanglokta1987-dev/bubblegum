@@ -1,6 +1,6 @@
 """
-BubbleGum — Form Extractor + Form Filler
-Serves bubblegum.html via localhost, with hardware-locked activation.
+BubbleGum — Form Extractor + Form Filler (Business Logic)
+This file is auto-updated from GitHub. exec()'d by bubblegum_launcher.py.
 """
 
 import base64
@@ -25,144 +25,8 @@ import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
-# ── Shared secret (obfuscated in compiled bytecode) ──────────────────────────
-_S = [0x42,0x75,0x62,0x62,0x6C,0x65,0x47,0x75,0x6D,0x2D,
-      0x53,0x33,0x63,0x72,0x33,0x74,0x2D,0x4B,0x33,0x79,
-      0x2D,0x58,0x39,0x71,0x37,0x5A,0x6D,0x50,0x32,0x76,
-      0x4C,0x38]
-SECRET = bytes(_S).decode()
-
 PORT = 8000
 APP_DIR = Path(os.environ.get("APPDATA", "")) / "BubbleGum"
-LICENSE_FILE = APP_DIR / "license.dat"
-
-
-# ── Machine Fingerprint ──────────────────────────────────────────────────────
-
-def _wmic(cls, prop):
-    try:
-        out = subprocess.check_output(
-            f"wmic {cls} get {prop}", shell=True,
-            stderr=subprocess.DEVNULL, text=True
-        )
-        for line in out.strip().splitlines()[1:]:
-            val = line.strip()
-            if val:
-                return val
-    except Exception:
-        pass
-    return ""
-
-
-def get_machine_id():
-    mac = format(uuid.getnode(), "012X")
-    cpu = _wmic("cpu", "ProcessorId")
-    disk = _wmic("diskdrive", "SerialNumber")
-    raw = f"{mac}|{cpu}|{disk}"
-    digest = hashlib.sha256(raw.encode()).hexdigest()[:16].upper()
-    return f"{digest[:4]}-{digest[4:8]}-{digest[8:12]}-{digest[12:16]}"
-
-
-# ── Activation Key ───────────────────────────────────────────────────────────
-
-def compute_key(machine_id):
-    h = hmac.new(SECRET.encode(), machine_id.encode(), hashlib.sha256).hexdigest()[:20].upper()
-    return f"{h[:5]}-{h[5:10]}-{h[10:15]}-{h[15:20]}"
-
-
-# ── License Storage ──────────────────────────────────────────────────────────
-
-def read_license():
-    try:
-        data = json.loads(LICENSE_FILE.read_text())
-        return data.get("activation_key", "")
-    except Exception:
-        return ""
-
-
-def write_license(key):
-    APP_DIR.mkdir(parents=True, exist_ok=True)
-    LICENSE_FILE.write_text(json.dumps({"activation_key": key}))
-
-
-def is_activated():
-    stored = read_license()
-    if not stored:
-        return False
-    expected = compute_key(get_machine_id())
-    return stored == expected
-
-
-# ── Tkinter Activation Dialog ────────────────────────────────────────────────
-
-def show_activation_dialog():
-    import tkinter as tk
-    from tkinter import messagebox
-
-    machine_id = get_machine_id()
-    result = {"activated": False}
-
-    root = tk.Tk()
-    root.title("BubbleGum — Activation")
-    root.geometry("480x320")
-    root.resizable(False, False)
-    root.configure(bg="#1a1a2e")
-
-    try:
-        if getattr(sys, "frozen", False):
-            icon_path = os.path.join(sys._MEIPASS, "bubblegum.ico")
-        else:
-            icon_path = os.path.join(os.path.dirname(__file__), "bubblegum.ico")
-        if os.path.exists(icon_path):
-            root.iconbitmap(icon_path)
-    except Exception:
-        pass
-
-    tk.Label(root, text="BubbleGum", font=("Segoe UI", 22, "bold"),
-             fg="#ff3d8b", bg="#1a1a2e").pack(pady=(30, 5))
-    tk.Label(root, text="Machine-bound activation required",
-             font=("Segoe UI", 10), fg="#888", bg="#1a1a2e").pack()
-
-    frame_mid = tk.Frame(root, bg="#1a1a2e")
-    frame_mid.pack(pady=(20, 5))
-    tk.Label(frame_mid, text="Machine ID:", font=("Consolas", 10),
-             fg="#aaa", bg="#1a1a2e").pack(side="left", padx=(0, 8))
-    mid_entry = tk.Entry(frame_mid, font=("Consolas", 12), width=22,
-                         fg="#ff3d8b", bg="#2a2a3e", relief="flat",
-                         readonlybackground="#2a2a3e", justify="center")
-    mid_entry.insert(0, machine_id)
-    mid_entry.configure(state="readonly")
-    mid_entry.pack(side="left")
-
-    tk.Label(root, text="Activation Key:", font=("Consolas", 10),
-             fg="#aaa", bg="#1a1a2e").pack(pady=(20, 5))
-    key_entry = tk.Entry(root, font=("Consolas", 12), width=28,
-                         fg="#fff", bg="#2a2a3e", relief="flat",
-                         insertbackground="#fff", justify="center")
-    key_entry.pack()
-    key_entry.focus_set()
-
-    def activate():
-        entered = key_entry.get().strip().upper()
-        expected = compute_key(machine_id)
-        if entered == expected:
-            write_license(entered)
-            result["activated"] = True
-            root.destroy()
-        else:
-            messagebox.showerror("Invalid Key",
-                                 "The activation key does not match this machine.",
-                                 parent=root)
-
-    btn = tk.Button(root, text="Activate", font=("Segoe UI", 11, "bold"),
-                    fg="#fff", bg="#ff3d8b", activebackground="#ff6aaa",
-                    relief="flat", padx=30, pady=6, cursor="hand2",
-                    command=activate)
-    btn.pack(pady=(20, 0))
-    root.bind("<Return>", lambda e: activate())
-    root.protocol("WM_DELETE_WINDOW", lambda: (root.destroy(),))
-    root.mainloop()
-    return result["activated"]
 
 
 # ── WAF / JS-Form Detection ─────────────────────────────────────────────────
@@ -607,48 +471,6 @@ def _fill_current_row():
 
 
 # ── HTTP Server ──────────────────────────────────────────────────────────────
-
-# ── HTML Auto-Updater ────────────────────────────────────────────────────────
-
-GITHUB_REPO = "sandanglokta1987-dev/bubblegum"
-GITHUB_BRANCH = "rebuild"
-
-
-def _update_html():
-    """Check GitHub for newer bubblegum.html, download to APPDATA if found.
-    Only updates HTML (extraction logic, UI) — never touches the Python exe."""
-    try:
-        sha_file = APP_DIR / ".html_sha"
-        local_sha = sha_file.read_text().strip() if sha_file.exists() else ""
-
-        # Get latest commit SHA
-        api_url = f"https://api.github.com/repos/{GITHUB_REPO}/commits/{GITHUB_BRANCH}"
-        req = urllib.request.Request(api_url, headers={
-            'User-Agent': 'BubbleGum/1.0',
-            'Accept': 'application/vnd.github.v3+json',
-        })
-        ctx = ssl.create_default_context()
-        resp = urllib.request.urlopen(req, timeout=10, context=ctx)
-        commit = json.loads(resp.read().decode())
-        remote_sha = commit["sha"]
-
-        if remote_sha == local_sha:
-            print("[updater] HTML is up to date.", flush=True)
-            return
-
-        # Download bubblegum.html
-        raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/bubblegum.html"
-        req = urllib.request.Request(raw_url, headers={'User-Agent': 'BubbleGum/1.0'})
-        content = urllib.request.urlopen(req, timeout=15, context=ctx).read()
-
-        APP_DIR.mkdir(parents=True, exist_ok=True)
-        (APP_DIR / "bubblegum.html").write_bytes(content)
-        sha_file.write_text(remote_sha)
-        print(f"[updater] HTML updated ({len(content)} bytes, {remote_sha[:8]})", flush=True)
-
-    except Exception as e:
-        print(f"[updater] Update check failed (offline?): {e}", flush=True)
-
 
 def get_serve_dir():
     """Serve from APPDATA if updated HTML exists there, else from bundled."""
@@ -1165,27 +987,5 @@ def start_server():
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
-def main():
-    if not is_activated():
-        if not show_activation_dialog():
-            sys.exit(0)
-
-    # Check for HTML updates from GitHub (non-blocking on failure)
-    _update_html()
-
-    server = start_server()
-    url = f"http://127.0.0.1:{PORT}/bubblegum.html"
-    time.sleep(0.3)
-    webbrowser.open(url)
-
-    print(f"BubbleGum running at {url}")
-    print("Close this window to stop the server.")
-
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        server.shutdown()
-
-
-if __name__ == "__main__":
-    main()
+# Note: main() and activation are in bubblegum_launcher.py (the exe).
+# This file is exec()'d by the launcher. start_server() is called by the launcher.
