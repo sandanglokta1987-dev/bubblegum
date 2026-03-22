@@ -160,14 +160,19 @@ def _update_files():
     try:
         sha_file = APP_DIR / ".update_sha"
 
-        # Migrate from old versions: if .update_sha doesn't exist but old files do,
-        # wipe cached files to force fresh download (old V3 cache → new V4)
-        if not sha_file.exists():
-            for old in [APP_DIR / ".version", APP_DIR / ".html_sha",
-                        APP_DIR / "bubblegum.html", APP_DIR / "bubblegum_app.py"]:
-                if old.exists():
-                    old.unlink()
-                    print(f"[updater] Removed old cache: {old.name}", flush=True)
+        # Always check: if cached HTML is old V3, wipe everything and force re-download
+        cached_html = APP_DIR / "bubblegum.html"
+        if cached_html.exists():
+            try:
+                snippet = cached_html.read_text(encoding='utf-8', errors='replace')[:3000]
+                if any(marker in snippet for marker in ['Firecrawl', 'Scanner', 'V3', 'Spammer URL', 'firecrawl']):
+                    for f in [cached_html, APP_DIR / "bubblegum_app.py",
+                              sha_file, APP_DIR / ".html_sha", APP_DIR / ".version"]:
+                        if f.exists():
+                            f.unlink()
+                    print("[updater] Old V3 cache detected and removed", flush=True)
+            except Exception:
+                pass
 
         local_sha = sha_file.read_text().strip() if sha_file.exists() else ""
 
