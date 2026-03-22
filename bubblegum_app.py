@@ -102,8 +102,14 @@ def _get_edge_driver():
     opts.add_argument('--disable-gpu')
     opts.add_argument('--no-sandbox')
     opts.add_argument('--disable-dev-shm-usage')
+    # Anti-detection stealth
     opts.add_argument('--disable-blink-features=AutomationControlled')
     opts.add_experimental_option('excludeSwitches', ['enable-automation'])
+    opts.add_experimental_option('useAutomationExtension', False)
+    opts.add_argument('--disable-infobars')
+    opts.add_argument('--disable-extensions')
+    opts.add_argument('--window-size=1920,1080')
+    opts.add_argument('--lang=en-US')
     opts.add_argument(
         'user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
         'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -112,6 +118,18 @@ def _get_edge_driver():
 
     _edge_driver = Edge(options=opts)
     _edge_driver.set_page_load_timeout(30)
+
+    # CDP stealth: hide webdriver flag, fake plugins/languages
+    try:
+        _edge_driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {'source': '''
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+            Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+            window.chrome = {runtime: {}};
+        '''})
+    except Exception:
+        pass
+
     return _edge_driver
 
 
@@ -153,6 +171,9 @@ def _get_filler_driver():
     opts = EdgeOptions()
     opts.add_argument('--disable-blink-features=AutomationControlled')
     opts.add_experimental_option('excludeSwitches', ['enable-automation'])
+    opts.add_experimental_option('useAutomationExtension', False)
+    opts.add_argument('--disable-infobars')
+    opts.add_argument('--lang=en-US')
     opts.add_argument(
         'user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
         'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -162,6 +183,18 @@ def _get_filler_driver():
     _filler_driver = Edge(options=opts)
     _filler_driver.set_page_load_timeout(30)
     _filler_driver.maximize_window()
+
+    # CDP stealth for visible browser
+    try:
+        _filler_driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {'source': '''
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+            Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+            window.chrome = {runtime: {}};
+        '''})
+    except Exception:
+        pass
+
     return _filler_driver
 
 
@@ -701,6 +734,7 @@ class QuietHandler(SimpleHTTPRequestHandler):
     # ── Proxy ────────────────────────────────────────────────────
 
     def _handle_proxy(self, query):
+        """Always use headless Edge browser — bypasses WAF, bot detection, JS rendering."""
         params = urllib.parse.parse_qs(query)
         url = params.get('url', [''])[0]
         if not url:
@@ -710,86 +744,35 @@ class QuietHandler(SimpleHTTPRequestHandler):
             self.send_error(400, 'URL must start with http:// or https://')
             return
 
-        use_browser = False
-        data = b''
-        real_status = 0
-        final_url = url
-
-        # Step 1: Try urllib first
         try:
-            req = urllib.request.Request(url, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                              'AppleWebKit/537.36 (KHTML, like Gecko) '
-                              'Chrome/131.0.0.0 Safari/537.36'
-            })
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            try:
-                resp = urllib.request.urlopen(req, timeout=15, context=ctx)
-                real_status = resp.getcode()
-                final_url = resp.geturl()
-                data = resp.read(5 * 1024 * 1024)
-                resp.close()
-            except urllib.error.HTTPError as he:
-                real_status = he.code
-                data = he.read(5 * 1024 * 1024)
-                he.close()
+            print(f"[proxy] Edge fetching {url}", flush=True)
+            html = fetch_with_edge(url)
+            data = html.encode('utf-8')
+            print(f"[proxy] Edge returned {len(data)} bytes", flush=True)
 
-            # Check if we got a WAF page or JS-rendered forms
-            html_text = data.decode('utf-8', errors='replace')
-            waf = detect_waf(html_text)
-            js_forms = detect_js_forms_no_html_forms(html_text)
-
-            if waf:
-                print(f"[proxy] WAF detected ({waf}) for {url}, falling back to Edge", flush=True)
-                use_browser = True
-            elif js_forms:
-                print(f"[proxy] JS-rendered forms detected for {url}, falling back to Edge", flush=True)
-                use_browser = True
-            elif real_status in (403, 406, 429, 503):
-                print(f"[proxy] HTTP {real_status} for {url}, falling back to Edge", flush=True)
-                use_browser = True
-            else:
-                print(f"[proxy] urllib OK for {url} ({len(data)} bytes)", flush=True)
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('X-Proxy-Status', '200')
+            self.send_header('X-Proxy-Url', url)
+            self.send_header('X-Proxy-Method', 'edge')
+            self.send_header('Access-Control-Expose-Headers',
+                             'X-Proxy-Status, X-Proxy-Url, X-Proxy-Method')
+            self.end_headers()
+            self.wfile.write(data)
 
         except Exception as e:
-            print(f"[proxy] urllib failed for {url}: {e}, trying Edge", flush=True)
-            use_browser = True
-
-        # Step 2: Fall back to headless Edge if needed
-        if use_browser:
-            try:
-                html = fetch_with_edge(url)
-                data = html.encode('utf-8')
-                real_status = 200
-                final_url = url
-                print(f"[proxy] Edge returned {len(data)} bytes for {url}", flush=True)
-            except Exception as e:
-                print(f"[proxy] Edge also failed for {url}: {e}", flush=True)
-                self.send_response(502)
-                self.send_header('Content-Type', 'text/plain')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.send_header('X-Proxy-Status', '502')
-                self.send_header('X-Proxy-Url', url)
-                self.send_header('X-Proxy-Method', 'edge-failed')
-                self.send_header('Access-Control-Expose-Headers',
-                                 'X-Proxy-Status, X-Proxy-Url, X-Proxy-Method')
-                self.end_headers()
-                self.wfile.write(str(e).encode())
-                return
-
-        method = 'edge' if use_browser else 'urllib'
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/html; charset=utf-8')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('X-Proxy-Status', str(real_status))
-        self.send_header('X-Proxy-Url', final_url)
-        self.send_header('X-Proxy-Method', method)
-        self.send_header('Access-Control-Expose-Headers',
-                         'X-Proxy-Status, X-Proxy-Url, X-Proxy-Method')
-        self.end_headers()
-        self.wfile.write(data)
+            print(f"[proxy] Edge failed for {url}: {e}", flush=True)
+            self.send_response(502)
+            self.send_header('Content-Type', 'text/plain')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('X-Proxy-Status', '502')
+            self.send_header('X-Proxy-Url', url)
+            self.send_header('X-Proxy-Method', 'edge-failed')
+            self.send_header('Access-Control-Expose-Headers',
+                             'X-Proxy-Status, X-Proxy-Url, X-Proxy-Method')
+            self.end_headers()
+            self.wfile.write(str(e).encode())
 
     # ── Form Filler Endpoints ────────────────────────────────────
 
