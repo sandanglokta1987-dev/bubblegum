@@ -668,9 +668,10 @@ async function runGenerate() {
   status.textContent = 'Calling AI...';
   status.style.color = 'var(--amber)';
 
-  // Build field description
+  // Build field description using name attributes as primary identifiers
+  const pageUrl = $('feUrl').value.trim();
   const fieldLines = fields.map(f => {
-    let line = `- ${f.label || f.name || 'unknown'} (name: ${f.name || '?'}) type: ${f.type || 'text'}`;
+    let line = `- name="${f.name || '?'}" label="${f.label || ''}" type: ${f.type || 'text'}`;
     if (f.required) line += ' [REQUIRED]';
     if (f.options && f.options.length) line += ` options: ${f.options.slice(0, 30).join(', ')}`;
     if (f.placeholder) line += ` placeholder: ${f.placeholder}`;
@@ -679,16 +680,18 @@ async function runGenerate() {
 
   const prompt = `Generate exactly ${rowCount} rows of realistic, randomly varied form submission data as a CSV.
 
-FORM FIELDS:
+TARGET URL: ${pageUrl}
+
+FORM FIELDS (name attribute = what the form uses internally):
 ${fieldLines}
 
 RULES:
-- First row must be CSV headers (use the field name/label as column header)
+- CSV column headers MUST be the exact field name="" attributes listed above (NOT the labels)
+- First column MUST be "url" with the value "${pageUrl}" on EVERY row
 - Generate data for an average US adult — realistic names, US phone formats, US addresses, real-sounding emails
-- For dropdown/select fields, ONLY use values from the provided options list
+- For dropdown/select fields, ONLY use values from the provided options list exactly as written
 - For checkbox/radio fields, use appropriate yes/no or true/false values
 - Vary the data realistically — different names, cities, states, ages, etc.
-- Do NOT include a URL column
 - Do NOT wrap in markdown code blocks
 - Output ONLY the raw CSV text, nothing else${instructions ? `\n\nSPECIAL INSTRUCTIONS:\n${instructions}` : ''}`;
 
