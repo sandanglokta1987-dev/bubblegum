@@ -527,8 +527,8 @@ class QuietHandler(SimpleHTTPRequestHandler):
         if parsed.path == '/proxy':
             self._handle_proxy(parsed.query)
         elif parsed.path == '/quit':
-            self._send_json(200, {"ok": True, "message": "Shutting down"})
-            threading.Thread(target=lambda: (time.sleep(0.5), os._exit(0)), daemon=True).start()
+            self._send_json(200, {"ok": True})
+            threading.Thread(target=lambda: (time.sleep(2), os._exit(0)), daemon=True).start()
         else:
             super().do_GET()
 

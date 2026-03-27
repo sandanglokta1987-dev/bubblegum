@@ -223,19 +223,19 @@ def _show_splash_and_launch():
     import tkinter as tk
     import threading
 
+    W, H = 480, 260
     root = tk.Tk()
     root.title("BubbleGum")
-    root.geometry("400x220")
+    root.geometry(f"{W}x{H}")
     root.resizable(False, False)
-    root.configure(bg="#1a1a2e")
-    root.attributes('-topmost', True)
     root.overrideredirect(True)  # no title bar
+    root.attributes('-topmost', True)
 
     # Center on screen
     root.update_idletasks()
-    x = (root.winfo_screenwidth() // 2) - 200
-    y = (root.winfo_screenheight() // 2) - 110
-    root.geometry(f"400x220+{x}+{y}")
+    x = (root.winfo_screenwidth() // 2) - (W // 2)
+    y = (root.winfo_screenheight() // 2) - (H // 2)
+    root.geometry(f"{W}x{H}+{x}+{y}")
 
     try:
         if getattr(sys, "frozen", False):
@@ -247,27 +247,63 @@ def _show_splash_and_launch():
     except Exception:
         pass
 
-    tk.Label(root, text="BubbleGum", font=("Segoe UI", 28, "bold"),
-             fg="#ff3d8b", bg="#1a1a2e").pack(pady=(30, 4))
-    tk.Label(root, text="Form Extractor + Form Filler",
-             font=("Segoe UI", 11), fg="#888", bg="#1a1a2e").pack()
+    # Dark gradient background using canvas
+    canvas = tk.Canvas(root, width=W, height=H, highlightthickness=0, bd=0)
+    canvas.pack(fill="both", expand=True)
 
+    # Draw gradient background (dark purple to darker)
+    for i in range(H):
+        r = int(26 - (i / H) * 10)
+        g = int(10 - (i / H) * 6)
+        b = int(30 + (i / H) * 10)
+        color = f'#{max(r,0):02x}{max(g,0):02x}{min(b,40):02x}'
+        canvas.create_line(0, i, W, i, fill=color)
+
+    # Subtle glow circle
+    canvas.create_oval(W//2 - 120, 20, W//2 + 120, 160,
+                       fill='', outline='', width=0)
+
+    # Logo bubble
+    canvas.create_oval(W//2 - 90, 30, W//2 - 50, 70,
+                       fill='#ff69b4', outline='#ff8cc8', width=2)
+    canvas.create_text(W//2 - 70, 50, text='\U0001F9CB', font=("Segoe UI", 16))
+
+    # Title
+    canvas.create_text(W//2 + 10, 50, text="BubbleGum",
+                       font=("Segoe UI", 32, "bold"), fill="#ff69b4", anchor="w")
+
+    # Tagline
+    canvas.create_text(W//2, 95, text="Intelligent Form Automation",
+                       font=("Segoe UI", 12), fill="#a070a0")
+
+    # Version
+    canvas.create_text(W - 20, H - 15, text="v4.0",
+                       font=("Segoe UI", 9), fill="#4a2250", anchor="e")
+
+    # Status text
     status_var = tk.StringVar(value="Starting...")
     status_label = tk.Label(root, textvariable=status_var,
-                            font=("Segoe UI", 10), fg="#d4a0d0", bg="#1a1a2e")
-    status_label.pack(pady=(20, 0))
+                            font=("Segoe UI", 10), fg="#d4a0d0",
+                            bg="#1a1a2e", bd=0)
+    status_label.place(x=W//2, y=145, anchor="center")
 
-    # Progress bar
-    bar_frame = tk.Frame(root, bg="#2a2a3e", height=4, width=300)
-    bar_frame.pack(pady=(12, 0))
-    bar_frame.pack_propagate(False)
-    bar_fill = tk.Frame(bar_frame, bg="#ff3d8b", height=4, width=0)
-    bar_fill.place(x=0, y=0, height=4)
+    # Progress bar background
+    bar_x, bar_y, bar_w, bar_h = 60, 175, W - 120, 5
+    canvas.create_rectangle(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h,
+                            fill="#2a1230", outline="#3a1a40", width=1)
+    # Progress bar fill (will be updated)
+    bar_fill_id = canvas.create_rectangle(bar_x, bar_y, bar_x, bar_y + bar_h,
+                                          fill="#ff69b4", outline="", width=0)
+
+    # Powered by line
+    canvas.create_text(W//2, H - 15, text="powered by Selenium + AI",
+                       font=("Segoe UI", 8), fill="#3a1a40")
 
     def set_status(msg, pct=0):
         try:
             status_var.set(msg)
-            bar_fill.place(x=0, y=0, height=4, width=int(3 * pct))
+            fill_w = int((bar_w * pct) / 100)
+            canvas.coords(bar_fill_id, bar_x, bar_y, bar_x + fill_w, bar_y + bar_h)
             root.update_idletasks()
         except Exception:
             pass
