@@ -272,9 +272,23 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
         <div style="margin-left:auto;display:flex;gap:8px;">
           <button class="btn-export" onclick="feExportCsv()">Export CSV</button>
           <button class="btn-export" onclick="feExportJson()">Export JSON</button>
+          <button class="btn-export" style="background:var(--pink-bg);color:var(--pink);border-color:var(--pink-border);" onclick="toggleGenPanel()">Generate Data &darr;</button>
         </div>
       </div>
       <div class="result-list" id="feList"></div>
+      <!-- Data Generation Panel -->
+      <div id="genPanel" class="hidden" style="margin-top:16px;padding:20px 24px;background:var(--surface2);border:1px solid var(--pink-border);border-radius:16px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap;">
+          <span style="font-family:var(--mono);font-size:13px;color:var(--pink);">Generate rows:</span>
+          <input type="number" id="genRowCount" value="50" min="1" max="500" style="width:80px;padding:8px 12px;background:var(--surface3);border:1px solid var(--border2);border-radius:10px;font-family:var(--mono);font-size:14px;color:var(--text);outline:none;">
+          <button class="btn btn-primary" id="genBtn" onclick="runGenerate()" style="padding:10px 22px;font-size:14px;">Generate CSV</button>
+          <span id="genStatus" style="font-family:var(--mono);font-size:13px;color:var(--hint);"></span>
+        </div>
+        <details style="margin-bottom:0;">
+          <summary style="font-family:var(--mono);font-size:12px;color:var(--hint);cursor:pointer;user-select:none;">Special instructions (optional)</summary>
+          <textarea id="genInstructions" rows="2" placeholder="e.g. &quot;use pharmacy-related business names&quot; or &quot;all entries from Texas&quot;" style="width:100%;margin-top:8px;padding:10px 14px;background:var(--surface3);border:1px solid var(--border2);border-radius:10px;font-family:var(--mono);font-size:13px;color:var(--text);outline:none;resize:vertical;"></textarea>
+        </details>
+      </div>
     </div>
   </div>
 
@@ -622,6 +636,68 @@ function feExportJson() {
   const data = { site: $('feUrl').value.trim(), extracted_at: date, tier: currentTier, summary: { pages: feResults.length, forms: tf, fields: tfi }, pages: feResults.map(p => ({ url: p.url, forms: p.forms || [] })) };
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   a.download = `forms-${host}-${date}.json`; a.click();
+}
+
+// ─── DATA GENERATION ──────────────────────────────────────────
+
+function toggleGenPanel() {
+  const p = $('genPanel');
+  if (p.classList.contains('hidden')) {
+    if (!feResults.length) { alert('Extract a form first.'); return; }
+    const model = $('modelSelect').value;
+    if (isOpenAIModel(model)) { if (!$('oaiKey').value.trim()) { alert('Set your OpenAI API key in the Form Filler tab first.'); return; } }
+    else { if (!$('aiKey').value.trim()) { alert('Set your Anthropic API key in the Form Filler tab first.'); return; } }
+    p.classList.remove('hidden');
+  } else {
+    p.classList.add('hidden');
+  }
+}
+
+async function runGenerate() {
+  if (!feResults.length) return;
+  const fields = [];
+  for (const page of feResults) for (const form of (page.forms||[])) for (const f of (form.fields||[])) fields.push(f);
+  if (!fields.length) { alert('No fields found to generate data for.'); return; }
+
+  const rowCount = parseInt($('genRowCount').value) || 50;
+  const instructions = $('genInstructions') ? $('genInstructions').value.trim() : '';
+  const btn = $('genBtn');
+  const status = $('genStatus');
+
+  btn.disabled = true; btn.textContent = 'Generating...';
+  status.textContent = 'Calling AI...';
+  status.style.color = 'var(--amber)';
+
+  try {
+    const res = await fetch('/generate-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields, row_count: rowCount, instructions,
+        ai_key: $('aiKey').value.trim(),
+        oai_key: $('oaiKey').value.trim(),
+        ai_model: $('modelSelect').value
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) { status.textContent = data.error || 'Generation failed'; status.style.color = 'var(--red)'; return; }
+
+    // Auto-download the CSV
+    const host = extractHost($('feUrl').value.trim()) || 'site';
+    const date = new Date().toISOString().split('T')[0];
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data.csv], { type: 'text/csv' }));
+    a.download = `data-${host}-${rowCount}rows-${date}.csv`;
+    a.click();
+
+    status.textContent = `Done \u2714 ${rowCount} rows downloaded`;
+    status.style.color = 'var(--green)';
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    status.style.color = 'var(--red)';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Generate CSV';
+  }
 }
 
 // ─── FORM EXTRACTOR: ORCHESTRATOR ──────────────────────────────
