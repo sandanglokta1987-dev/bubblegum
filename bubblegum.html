@@ -230,10 +230,6 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
         </optgroup>
       </select>
     </div>
-    <div class="field">
-      <label>CapSolver API Key <span class="opt">auto-solves captchas</span></label>
-      <input type="password" id="capKey" placeholder="CAP-..." autocomplete="off">
-    </div>
   </div>
 
   <!-- TAB 1: FORM EXTRACTOR -->
@@ -314,7 +310,6 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
       <div class="btn-row">
         <button class="btn btn-primary" id="ffStartBtn" disabled>Start Filling &rarr;</button>
         <button class="btn btn-primary hidden" id="ffNextBtn">Next Row &rarr;</button>
-        <button class="btn-outline hidden" id="ffCaptchaBtn" style="color:var(--amber);border-color:rgba(245,158,11,.35);">Solve Captcha</button>
         <button class="btn-stop hidden" id="ffStopBtn">&#x25A0; Stop</button>
         <button class="btn-export hidden" id="ffResultsBtn" onclick="ffDownloadResults()">Download Results CSV</button>
         <span class="live-badge hidden" id="ffLiveBadge">ready</span>
@@ -402,7 +397,6 @@ async function checkStatus() {
   localStorage.setItem('bg_aiKey', aiKey);
   localStorage.setItem('bg_oaiKey', oaiKey);
   localStorage.setItem('bg_model', $('modelSelect').value);
-  localStorage.setItem('bg_capKey', $('capKey').value.trim());
 
   const aiDot = $('aiDot'), aiText = $('aiText');
   if (!aiKey) { aiDot.className = 'sdot'; aiText.className = 'stext'; aiText.textContent = 'no key'; }
@@ -945,7 +939,7 @@ async function ffFillStep(pos) {
   if (pos >= ffSchedule.length) {
     ffLog(`Done \u2014 all ${ffSchedule.length} rows completed`, 'ok');
     $('ffLiveBadge').classList.remove('active'); $('ffLiveBadge').textContent = 'completed';
-    hide('ffNextBtn'); hide('ffStopBtn'); hide('ffCaptchaBtn'); show('ffStartBtn'); show('ffResultsBtn');
+    hide('ffNextBtn'); hide('ffStopBtn'); show('ffStartBtn'); show('ffResultsBtn');
     $('ffStartBtn').disabled = false; $('ffStartBtn').textContent = `Start Filling (${ffTotalRows} rows) \u2192`;
     $('ffStatus').innerHTML = '<span class="count">All rows completed</span>';
     ffActive = false;
@@ -972,7 +966,6 @@ async function ffFillStep(pos) {
         ai_key: $('aiKey').value.trim(),
         oai_key: $('oaiKey').value.trim(),
         ai_model: $('modelSelect').value,
-        captcha_key: $('capKey').value.trim()
       })
     });
     const data = await res.json();
@@ -1021,7 +1014,7 @@ async function ffStart() {
   ffLog(`Starting: ${ffJobs.length} sites, ${ffSchedule.length} rows (round-robin)`, 'info');
   for (const j of ffJobs) ffLog(`  ${j.name}: ${j.rowCount} rows`, 'info');
 
-  ffActive = true; hide('ffStartBtn'); show('ffNextBtn'); show('ffStopBtn'); show('ffLiveBadge'); show('ffCaptchaBtn');
+  ffActive = true; hide('ffStartBtn'); show('ffNextBtn'); show('ffStopBtn'); show('ffLiveBadge');
   $('ffLiveBadge').classList.add('active');
 
   await ffFillStep(0);
@@ -1047,23 +1040,8 @@ async function ffStop() {
   if (ffResultsData.length) show('ffResultsBtn');
   ffLog('Session stopped', 'warn'); ffActive = false;
   $('ffLiveBadge').classList.remove('active'); $('ffLiveBadge').textContent = 'stopped';
-  hide('ffNextBtn'); hide('ffStopBtn'); hide('ffCaptchaBtn'); show('ffStartBtn');
+  hide('ffNextBtn'); hide('ffStopBtn'); show('ffStartBtn');
   $('ffStartBtn').disabled = false; $('ffStartBtn').textContent = `Start Filling (${ffTotalRows} rows) \u2192`;
-}
-
-async function ffSolveCaptcha() {
-  const btn = $('ffCaptchaBtn');
-  btn.disabled = true; btn.textContent = 'Solving...';
-  ffLog('Sending captcha to CapSolver...', 'info');
-  try {
-    const res = await fetch('/filler/solve-captcha', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    const data = await res.json();
-    if (data.error && !data.captcha_type) { ffLog(data.error, 'err'); }
-    else if (!data.captcha_found) { ffLog('No captcha detected on page', 'info'); }
-    else if (data.ok) { ffLog(`Captcha solved \u2714 (${data.captcha_type}, ${data.time}s) \u2014 now submit the form`, 'ok'); }
-    else { ffLog(data.error || 'Captcha solve failed \u2014 click again to retry', 'warn'); }
-  } catch (e) { ffLog('Captcha error: ' + e.message, 'err'); }
-  btn.disabled = false; btn.textContent = 'Solve Captcha';
 }
 
 function ffDownloadResults() {
@@ -1107,7 +1085,6 @@ function switchFeMode(mode) {
 document.addEventListener('DOMContentLoaded', () => {
   $('aiKey').value = localStorage.getItem('bg_aiKey') || '';
   $('oaiKey').value = localStorage.getItem('bg_oaiKey') || '';
-  $('capKey').value = localStorage.getItem('bg_capKey') || '';
   const sm = localStorage.getItem('bg_model'); if (sm) $('modelSelect').value = sm;
 
   $('tabExtractor').addEventListener('click', () => switchTab('extractor'));
@@ -1117,7 +1094,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('feBtn').addEventListener('click', runFormExtraction);
   $('ffStartBtn').addEventListener('click', ffStart);
   $('ffNextBtn').addEventListener('click', ffNext);
-  $('ffCaptchaBtn').addEventListener('click', ffSolveCaptcha);
   $('ffStopBtn').addEventListener('click', ffStop);
   $('aiKey').addEventListener('input', scheduleStatusCheck);
   $('oaiKey').addEventListener('input', scheduleStatusCheck);

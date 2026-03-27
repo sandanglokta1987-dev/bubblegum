@@ -155,7 +155,78 @@ _filler_ai_key = ""
 _filler_oai_key = ""
 _filler_ai_model = ""
 _filler_field_maps = {}    # {url: {csv_col: element_id}} — AI mapping cache
-_captcha_api_key = "CAP-ED5F5BC298ACD06F27102102B73F5F4F4D5ED5187C2A57D42A43FA4100C85B0F"
+_CAPSOLVER_KEY = "CAP-ED5F5BC298ACD06F27102102B73F5F4F4D5ED5187C2A57D42A43FA4100C85B0F"
+_CAPSOLVER_EXT_URL = "https://github.com/capsolver/capsolver-browser-extension/releases/download/v.1.17.0/CapSolver.Browser.Extension-chrome-v1.17.0.zip"
+
+
+def _get_capsolver_extension_path():
+    """Download + configure CapSolver browser extension. Returns path to unpacked dir or None."""
+    ext_dir = APP_DIR / "capsolver_ext"
+    config_file = ext_dir / "assets" / "config.js"
+
+    # Check if already configured
+    if config_file.exists():
+        try:
+            content = config_file.read_text(encoding='utf-8')
+            if _CAPSOLVER_KEY in content:
+                return str(ext_dir)
+        except Exception:
+            pass
+
+    # Download and extract
+    try:
+        import zipfile
+        print("[capsolver] Downloading extension...", flush=True)
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(_CAPSOLVER_EXT_URL, headers={'User-Agent': 'BubbleGum/4.0'})
+        resp = urllib.request.urlopen(req, timeout=30, context=ctx)
+        zip_data = resp.read()
+
+        ext_dir.mkdir(parents=True, exist_ok=True)
+        zip_path = APP_DIR / "capsolver_ext.zip"
+        zip_path.write_bytes(zip_data)
+
+        with zipfile.ZipFile(str(zip_path), 'r') as zf:
+            zf.extractall(str(ext_dir))
+        zip_path.unlink()
+        print(f"[capsolver] Extracted to {ext_dir}", flush=True)
+    except Exception as e:
+        print(f"[capsolver] Download failed: {e}", flush=True)
+        return None
+
+    # Configure with API key
+    try:
+        config_content = f"""export const defaultConfig = {{
+  apiKey: '{_CAPSOLVER_KEY}',
+  appId: '',
+  useCapsolver: true,
+  manualSolving: false,
+  solvedCallback: 'captchaSolvedCallback',
+  useProxy: false,
+  enabledForRecaptcha: true,
+  enabledForRecaptchaV3: true,
+  enabledForImageToText: true,
+  enabledForAwsCaptcha: true,
+  enabledForCloudflare: true,
+  reCaptchaMode: 'click',
+  hCaptchaMode: 'click',
+  reCaptchaDelayTime: 0,
+  hCaptchaDelayTime: 0,
+  reCaptchaRepeatTimes: 10,
+  hCaptchaRepeatTimes: 10,
+  reCaptcha3RepeatTimes: 10,
+  reCaptcha3TaskType: 'ReCaptchaV3TaskProxyLess',
+  showSolveButton: true,
+}};
+"""
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        config_file.write_text(config_content, encoding='utf-8')
+        print("[capsolver] Extension configured", flush=True)
+    except Exception as e:
+        print(f"[capsolver] Config write failed: {e}", flush=True)
+        return None
+
+    return str(ext_dir)
 
 
 def _get_filler_driver():
@@ -180,6 +251,11 @@ def _get_filler_driver():
         'AppleWebKit/537.36 (KHTML, like Gecko) '
         'Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
     )
+
+    # Load CapSolver browser extension for auto captcha solving
+    ext_path = _get_capsolver_extension_path()
+    if ext_path:
+        opts.add_argument(f'--load-extension={ext_path}')
 
     _filler_driver = Edge(options=opts)
     _filler_driver.set_page_load_timeout(30)
@@ -353,187 +429,6 @@ RULES:
     return mapping
 
 
-def _detect_captcha(driver):
-    """Detect captcha on page. Returns (type, sitekey) or (None, None)."""
-    try:
-        result = driver.execute_script("""
-            // reCAPTCHA v2
-            let el = document.querySelector('.g-recaptcha[data-sitekey]');
-            if (el) return {type: 'recaptcha_v2', sitekey: el.getAttribute('data-sitekey')};
-            // reCAPTCHA v2 invisible
-            el = document.querySelector('[data-sitekey][data-size="invisible"]');
-            if (el) return {type: 'recaptcha_v2', sitekey: el.getAttribute('data-sitekey')};
-            // reCAPTCHA via iframe
-            let iframe = document.querySelector('iframe[src*="recaptcha/api2"]');
-            if (iframe) {
-                let m = iframe.src.match(/[?&]k=([^&]+)/);
-                if (m) return {type: 'recaptcha_v2', sitekey: m[1]};
-            }
-            // hCaptcha
-            el = document.querySelector('.h-captcha[data-sitekey]');
-            if (el) return {type: 'hcaptcha', sitekey: el.getAttribute('data-sitekey')};
-            // Cloudflare Turnstile
-            el = document.querySelector('.cf-turnstile[data-sitekey]');
-            if (el) return {type: 'turnstile', sitekey: el.getAttribute('data-sitekey')};
-            return null;
-        """)
-        if result:
-            return result.get('type'), result.get('sitekey')
-    except Exception:
-        pass
-    return None, None
-
-
-def _solve_captcha(captcha_type, sitekey, page_url):
-    """Send captcha to CapSolver and poll for solution. Returns token or None."""
-    if not _captcha_api_key or not sitekey:
-        return None
-
-    task_types = {
-        'recaptcha_v2': 'ReCaptchaV2TaskProxyLess',
-        'hcaptcha': 'HCaptchaTaskProxyless',
-        'turnstile': 'AntiTurnstileTaskProxyLess',
-    }
-    task_type = task_types.get(captcha_type)
-    if not task_type:
-        return None
-
-    ctx = ssl.create_default_context()
-
-    # Create task
-    task_data = {
-        "clientKey": _captcha_api_key,
-        "task": {
-            "type": task_type,
-            "websiteURL": page_url,
-            "websiteKey": sitekey
-        }
-    }
-    try:
-        req = urllib.request.Request(
-            "https://api.capsolver.com/createTask",
-            data=json.dumps(task_data).encode(),
-            headers={"Content-Type": "application/json"},
-            method='POST'
-        )
-        resp = urllib.request.urlopen(req, timeout=15, context=ctx)
-        result = json.loads(resp.read().decode())
-        task_id = result.get("taskId")
-        if not task_id:
-            print(f"[captcha] Create task failed: {result}", flush=True)
-            return None
-    except Exception as e:
-        print(f"[captcha] Create task error: {e}", flush=True)
-        return None
-
-    # Poll for result (max 120 seconds)
-    poll_data = {"clientKey": _captcha_api_key, "taskId": task_id}
-    for _ in range(60):
-        time.sleep(2)
-        try:
-            req = urllib.request.Request(
-                "https://api.capsolver.com/getTaskResult",
-                data=json.dumps(poll_data).encode(),
-                headers={"Content-Type": "application/json"},
-                method='POST'
-            )
-            resp = urllib.request.urlopen(req, timeout=15, context=ctx)
-            result = json.loads(resp.read().decode())
-            status = result.get("status")
-            if status == "ready":
-                token = result.get("solution", {}).get("gRecaptchaResponse") or \
-                        result.get("solution", {}).get("token")
-                print(f"[captcha] Solved ({captcha_type})", flush=True)
-                return token
-            if status not in ("idle", "processing"):
-                print(f"[captcha] Unexpected status: {result}", flush=True)
-                return None
-        except Exception as e:
-            print(f"[captcha] Poll error: {e}", flush=True)
-            return None
-
-    print("[captcha] Timed out", flush=True)
-    return None
-
-
-def _inject_captcha_token(driver, captcha_type, token):
-    """Inject solved captcha token into the page."""
-    try:
-        if captcha_type == 'recaptcha_v2':
-            driver.execute_script("""
-                var token = arguments[0];
-                // Inject token into all g-recaptcha-response textareas (keep hidden)
-                document.querySelectorAll('#g-recaptcha-response, [name="g-recaptcha-response"]').forEach(function(el) {
-                    el.value = token;
-                });
-                // Trigger callback — try safe methods only
-                var called = false;
-                // Method 1: data-callback attribute on widget
-                document.querySelectorAll('.g-recaptcha[data-callback]').forEach(function(widget) {
-                    var cb = widget.getAttribute('data-callback');
-                    if (cb && typeof window[cb] === 'function') { try { window[cb](token); called = true; } catch(e) {} }
-                });
-                // Method 2: known callback paths in ___grecaptcha_cfg.clients
-                if (!called) {
-                    try {
-                        var clients = ___grecaptcha_cfg.clients;
-                        for (var i in clients) {
-                            var c = clients[i];
-                            for (var k1 in c) {
-                                if (typeof c[k1] !== 'object' || c[k1] === null) continue;
-                                for (var k2 in c[k1]) {
-                                    if (typeof c[k1][k2] !== 'object' || c[k1][k2] === null) continue;
-                                    // Only call properties named 'callback' or 'promise-callback'
-                                    if (typeof c[k1][k2].callback === 'function') {
-                                        try { c[k1][k2].callback(token); called = true; } catch(e) {}
-                                    }
-                                    if (typeof c[k1][k2]['promise-callback'] === 'function') {
-                                        try { c[k1][k2]['promise-callback'](token); called = true; } catch(e) {}
-                                    }
-                                }
-                            }
-                        }
-                    } catch(e) {}
-                }
-                // Method 3: common global callback names
-                if (!called) {
-                    var names = ['onRecaptchaSuccess', 'recaptchaCallback', 'onSubmit', 'onCaptchaSuccess'];
-                    for (var n = 0; n < names.length; n++) {
-                        if (typeof window[names[n]] === 'function') { try { window[names[n]](token); } catch(e) {} }
-                    }
-                }
-                // Close modals/overlays that might contain the captcha
-                try {
-                    document.querySelectorAll('.ui-dialog-titlebar-close, [data-dismiss="modal"], .modal .close, .dialog-close, .close-dialog').forEach(function(b) { try { b.click(); } catch(e) {} });
-                    var overlay = document.querySelector('iframe[src*="recaptcha/api2/bframe"]');
-                    if (overlay) { var p = overlay.parentElement; while (p && p !== document.body) { if (p.style.position === 'fixed' || getComputedStyle(p).position === 'fixed') { p.style.display = 'none'; break; } p = p.parentElement; } }
-                } catch(e) {}
-            """, token)
-        elif captcha_type == 'hcaptcha':
-            driver.execute_script("""
-                var ta = document.querySelector('[name="h-captcha-response"]');
-                if (ta) ta.value = arguments[0];
-                document.querySelectorAll('[name="g-recaptcha-response"]').forEach(function(el) {
-                    el.value = arguments[0];
-                });
-                var widget = document.querySelector('.h-captcha');
-                if (widget) {
-                    var cb = widget.getAttribute('data-callback');
-                    if (cb && typeof window[cb] === 'function') window[cb](arguments[0]);
-                }
-            """, token)
-        elif captcha_type == 'turnstile':
-            driver.execute_script("""
-                var ta = document.querySelector('[name="cf-turnstile-response"]');
-                if (ta) ta.value = arguments[0];
-                document.querySelectorAll('input[name="cf-turnstile-response"]').forEach(function(el) {
-                    el.value = arguments[0];
-                });
-            """, token)
-        return True
-    except Exception as e:
-        print(f"[captcha] Inject error: {e}", flush=True)
-        return False
 
 
 def _fill_current_row():
@@ -778,8 +673,6 @@ class QuietHandler(SimpleHTTPRequestHandler):
             self._handle_filler_next()
         elif parsed.path == '/filler/stop':
             self._handle_filler_stop()
-        elif parsed.path == '/filler/solve-captcha':
-            self._handle_solve_captcha()
         else:
             self.send_error(404)
 
@@ -1021,7 +914,6 @@ class QuietHandler(SimpleHTTPRequestHandler):
         If no URL column, a 'url' field in the JSON is used as fallback."""
         global _filler_data, _filler_index, _filler_url, _filler_url_col, _filler_results
         global _filler_ai_key, _filler_oai_key, _filler_ai_model, _filler_field_maps
-        global _captcha_api_key
 
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length)
@@ -1042,9 +934,6 @@ class QuietHandler(SimpleHTTPRequestHandler):
             _filler_oai_key = data['oai_key']
         if data.get('ai_model'):
             _filler_ai_model = data['ai_model']
-        if data.get('captcha_key'):
-            _captcha_api_key = data['captcha_key']
-
         if not csv_text:
             self._send_json(400, {"error": "Missing csv_data"})
             return
@@ -1162,36 +1051,6 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
         result['url_changed'] = url_changed
         self._send_json(200, result)
-
-    def _handle_solve_captcha(self):
-        """Detect and solve captcha on current page using CapSolver."""
-        if not _captcha_api_key:
-            self._send_json(400, {"error": "No CapSolver key set"})
-            return
-        if not _filler_driver:
-            self._send_json(400, {"error": "No browser open"})
-            return
-
-        with _filler_lock:
-            ctype, skey = _detect_captcha(_filler_driver)
-
-        if not ctype:
-            self._send_json(200, {"ok": True, "captcha_found": False})
-            return
-
-        t0 = time.time()
-        token = _solve_captcha(ctype, skey, _filler_driver.current_url)
-        elapsed = round(time.time() - t0, 1)
-
-        if not token:
-            self._send_json(200, {"ok": False, "error": f"Solve failed ({elapsed}s) \u2014 click again to retry or solve manually",
-                                   "captcha_type": ctype, "time": elapsed})
-            return
-
-        with _filler_lock:
-            _inject_captcha_token(_filler_driver, ctype, token)
-
-        self._send_json(200, {"ok": True, "captcha_found": True, "captcha_type": ctype, "time": elapsed})
 
     def _handle_filler_stop(self):
         """Stop the filling session and close browser."""
