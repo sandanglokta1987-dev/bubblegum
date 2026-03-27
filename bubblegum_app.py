@@ -255,10 +255,6 @@ def _get_filler_driver():
         'Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
     )
 
-    # Persistent profile so extension settings survive between sessions
-    profile_dir = str(APP_DIR / "edge_profile")
-    opts.add_argument(f'--user-data-dir={profile_dir}')
-
     # Load CapSolver browser extension for auto captcha solving
     ext_path = _get_capsolver_extension_path()
     if ext_path:
