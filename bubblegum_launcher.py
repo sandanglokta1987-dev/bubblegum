@@ -218,33 +218,113 @@ def _get_logic_path():
     return Path(os.path.dirname(os.path.abspath(__file__))) / "bubblegum_app.py"
 
 
+def _show_splash_and_launch():
+    """Show a branded splash window during startup, then open browser."""
+    import tkinter as tk
+    import threading
+
+    root = tk.Tk()
+    root.title("BubbleGum")
+    root.geometry("400x220")
+    root.resizable(False, False)
+    root.configure(bg="#1a1a2e")
+    root.attributes('-topmost', True)
+    root.overrideredirect(True)  # no title bar
+
+    # Center on screen
+    root.update_idletasks()
+    x = (root.winfo_screenwidth() // 2) - 200
+    y = (root.winfo_screenheight() // 2) - 110
+    root.geometry(f"400x220+{x}+{y}")
+
+    try:
+        if getattr(sys, "frozen", False):
+            icon_path = os.path.join(sys._MEIPASS, "bubblegum.ico")
+        else:
+            icon_path = os.path.join(os.path.dirname(__file__), "bubblegum.ico")
+        if os.path.exists(icon_path):
+            root.iconbitmap(icon_path)
+    except Exception:
+        pass
+
+    tk.Label(root, text="BubbleGum", font=("Segoe UI", 28, "bold"),
+             fg="#ff3d8b", bg="#1a1a2e").pack(pady=(30, 4))
+    tk.Label(root, text="Form Extractor + Form Filler",
+             font=("Segoe UI", 11), fg="#888", bg="#1a1a2e").pack()
+
+    status_var = tk.StringVar(value="Starting...")
+    status_label = tk.Label(root, textvariable=status_var,
+                            font=("Segoe UI", 10), fg="#d4a0d0", bg="#1a1a2e")
+    status_label.pack(pady=(20, 0))
+
+    # Progress bar
+    bar_frame = tk.Frame(root, bg="#2a2a3e", height=4, width=300)
+    bar_frame.pack(pady=(12, 0))
+    bar_frame.pack_propagate(False)
+    bar_fill = tk.Frame(bar_frame, bg="#ff3d8b", height=4, width=0)
+    bar_fill.place(x=0, y=0, height=4)
+
+    def set_status(msg, pct=0):
+        try:
+            status_var.set(msg)
+            bar_fill.place(x=0, y=0, height=4, width=int(3 * pct))
+            root.update_idletasks()
+        except Exception:
+            pass
+
+    def startup_thread():
+        try:
+            set_status("Checking for updates...", 10)
+            _update_files()
+
+            set_status("Loading...", 50)
+            logic_path = _get_logic_path()
+            code = logic_path.read_text(encoding='utf-8')
+            exec(compile(code, str(logic_path), 'exec'), globals())
+
+            set_status("Starting server...", 75)
+            server = start_server()  # noqa: F821
+
+            set_status("Opening browser...", 90)
+            url = f"http://127.0.0.1:{PORT}/bubblegum.html"
+            time.sleep(0.3)
+            webbrowser.open(url)
+
+            set_status("Ready!", 100)
+            time.sleep(0.5)
+
+            # Close splash
+            try:
+                root.destroy()
+            except Exception:
+                pass
+
+            # Keep server alive
+            server.serve_forever()
+
+        except Exception as e:
+            set_status(f"Error: {e}", 0)
+            time.sleep(5)
+            try:
+                root.destroy()
+            except Exception:
+                pass
+            os._exit(1)
+
+    t = threading.Thread(target=startup_thread, daemon=True)
+    t.start()
+    root.mainloop()
+
+    # If splash was closed manually (X button), keep running until server dies
+    t.join()
+
+
 def main():
     if not is_activated():
         if not show_activation_dialog():
             sys.exit(0)
 
-    _update_files()
-
-    # Load the business logic via exec() — runs in our globals,
-    # so it has access to all bundled imports (selenium etc.)
-    logic_path = _get_logic_path()
-    print(f"[launcher] Loading logic from {logic_path}", flush=True)
-    code = logic_path.read_text(encoding='utf-8')
-    exec(compile(code, str(logic_path), 'exec'), globals())
-
-    # bubblegum_app.py defines start_server() and get_serve_dir()
-    server = start_server()  # noqa: F821 — defined by exec'd code
-    url = f"http://127.0.0.1:{PORT}/bubblegum.html"
-    time.sleep(0.3)
-    webbrowser.open(url)
-
-    print(f"BubbleGum running at {url}")
-    print("Close this window to stop the server.")
-
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        server.shutdown()
+    _show_splash_and_launch()
 
 
 if __name__ == "__main__":
