@@ -164,12 +164,15 @@ def _get_capsolver_extension_path():
     ext_dir = APP_DIR / "capsolver_ext"
     config_file = ext_dir / "assets" / "config.js"
 
-    # Check if already configured
+    # Check if already configured with LF line endings
     if config_file.exists():
         try:
-            content = config_file.read_text(encoding='utf-8')
-            if _CAPSOLVER_KEY in content:
+            raw = config_file.read_bytes()
+            if _CAPSOLVER_KEY.encode() in raw and b'\r\n' not in raw:
                 return str(ext_dir)
+            # CRLF detected or key missing — re-extract
+            import shutil
+            shutil.rmtree(str(ext_dir), ignore_errors=True)
         except Exception:
             pass
 
@@ -220,8 +223,8 @@ def _get_capsolver_extension_path():
 }};
 """
         config_file.parent.mkdir(parents=True, exist_ok=True)
-        config_file.write_text(config_content, encoding='utf-8')
-        print("[capsolver] Extension configured", flush=True)
+        config_file.write_bytes(config_content.encode('utf-8'))  # LF line endings, not CRLF
+        print("[capsolver] Extension configured (LF line endings)", flush=True)
     except Exception as e:
         print(f"[capsolver] Config write failed: {e}", flush=True)
         return None
