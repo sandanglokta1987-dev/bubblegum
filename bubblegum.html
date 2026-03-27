@@ -668,33 +668,30 @@ async function runGenerate() {
   status.textContent = 'Calling AI...';
   status.style.color = 'var(--amber)';
 
-  // Build field description using labels (unique) + names (for AI mapping context)
+  // Build the extraction CSV (same format as Export CSV) to feed to AI
   const pageUrl = $('feUrl').value.trim();
-  const fieldLines = fields.map(f => {
-    let line = `- "${f.label || f.name || 'unknown'}" (html name="${f.name || '?'}") type: ${f.type || 'text'}`;
-    if (f.required) line += ' [REQUIRED]';
-    if (f.options && f.options.length) line += ` options: ${f.options.slice(0, 30).join(', ')}`;
-    if (f.placeholder) line += ` placeholder: ${f.placeholder}`;
-    return line;
-  }).join('\n');
+  const extractionRows = [['Page URL','Form Plugin','Field Label','Field Name','Type','Required','Placeholder','Options']];
+  for (const page of feResults) for (const form of (page.forms||[])) for (const f of (form.fields||[]))
+    extractionRows.push([page.url, form.plugin||'', f.label||'', f.name||'', f.type||'', f.required?'yes':'no', f.placeholder||'', (f.options||[]).join('|')]);
+  const extractionCsv = extractionRows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
 
-  const prompt = `Generate exactly ${rowCount} rows of realistic, randomly varied form submission data as a CSV.
+  const prompt = `Here is the CSV mapping of an entire web form — it shows all fields, their HTML names, types, dropdowns, and options:
 
-TARGET URL: ${pageUrl}
+${extractionCsv}
 
-FORM FIELDS:
-${fieldLines}
+Generate exactly ${rowCount} rows of realistic, randomly generated data for this form as a downloadable CSV.
 
 RULES:
-- CSV column headers MUST be the field LABELS (the quoted text before each field). Labels are unique; html name attributes may repeat (e.g. "address" appears twice for present and permanent).
-- First column MUST be "url" with the value "${pageUrl}" on EVERY row
-- Skip honeypot fields, captcha fields, and hidden system fields — do NOT include them as columns
-- Generate data for an average US adult — realistic names, US phone formats, US addresses, real-sounding emails
-- For dropdown/select fields, ONLY use values from the provided options list exactly as written
-- For checkbox/radio fields, use appropriate yes/no or true/false values
-- Vary the data realistically — different names, cities, states, ages, etc.
-- Do NOT wrap in markdown code blocks
-- Output ONLY the raw CSV text, nothing else${instructions ? `\n\nSPECIAL INSTRUCTIONS:\n${instructions}` : ''}`;
+- First column must be "page_url" with "${pageUrl}" on every row
+- Use the Field Name column values as your CSV column headers (these are the HTML field names the form filler maps to)
+- If a Field Name appears more than once (duplicate), make headers unique by appending _1, _2 etc.
+- Skip hidden fields, captcha fields, honeypot fields, nonce fields, and search fields entirely
+- For select/dropdown fields, ONLY use exact values from the Options column
+- For radio fields, use the exact option text
+- For file upload fields, leave the cell empty
+- Generate data for an average US adult — realistic names, US phone/zip formats, US addresses, real-sounding emails
+- Vary data realistically across all ${rowCount} rows
+- Do NOT wrap in markdown code blocks — output ONLY raw CSV${instructions ? `\n\nSPECIAL INSTRUCTIONS:\n${instructions}` : ''}`;
 
   try {
     let csvText = await callAI(null, prompt, 16000);
