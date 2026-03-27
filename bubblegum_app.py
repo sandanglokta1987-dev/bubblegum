@@ -673,22 +673,7 @@ def _fill_current_row():
     if url_col and url_col in row:
         row_url = row[url_col]
 
-    # Auto-solve captcha if key is set
-    captcha_info = {}
-    if _captcha_api_key and _filler_driver:
-        ctype, skey = _detect_captcha(_filler_driver)
-        if ctype and skey:
-            captcha_info['captcha_type'] = ctype
-            t0 = time.time()
-            token = _solve_captcha(ctype, skey, row_url)
-            if token:
-                _inject_captcha_token(_filler_driver, ctype, token)
-                captcha_info['captcha_solved'] = True
-                captcha_info['captcha_time'] = round(time.time() - t0, 1)
-            else:
-                captcha_info['captcha_solved'] = False
-
-    result = {
+    return {
         "ok": True,
         "row": _filler_index + 1,
         "total": len(_filler_data),
@@ -697,8 +682,6 @@ def _fill_current_row():
         "remaining": len(_filler_data) - _filler_index - 1,
         "url": row_url
     }
-    result.update(captcha_info)
-    return result
 
 
 # ── HTTP Server ──────────────────────────────────────────────────────────────
@@ -742,6 +725,8 @@ class QuietHandler(SimpleHTTPRequestHandler):
             self._handle_filler_next()
         elif parsed.path == '/filler/stop':
             self._handle_filler_stop()
+        elif parsed.path == '/filler/solve-captcha':
+            self._handle_solve_captcha()
         else:
             self.send_error(404)
 
@@ -1124,6 +1109,36 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
         result['url_changed'] = url_changed
         self._send_json(200, result)
+
+    def _handle_solve_captcha(self):
+        """Detect and solve captcha on current page using CapSolver."""
+        if not _captcha_api_key:
+            self._send_json(400, {"error": "No CapSolver key set"})
+            return
+        if not _filler_driver:
+            self._send_json(400, {"error": "No browser open"})
+            return
+
+        with _filler_lock:
+            ctype, skey = _detect_captcha(_filler_driver)
+
+        if not ctype:
+            self._send_json(200, {"ok": True, "captcha_found": False})
+            return
+
+        t0 = time.time()
+        token = _solve_captcha(ctype, skey, _filler_driver.current_url)
+        elapsed = round(time.time() - t0, 1)
+
+        if not token:
+            self._send_json(200, {"ok": False, "error": f"Solve failed ({elapsed}s) \u2014 click again to retry or solve manually",
+                                   "captcha_type": ctype, "time": elapsed})
+            return
+
+        with _filler_lock:
+            _inject_captcha_token(_filler_driver, ctype, token)
+
+        self._send_json(200, {"ok": True, "captcha_found": True, "captcha_type": ctype, "time": elapsed})
 
     def _handle_filler_stop(self):
         """Stop the filling session and close browser."""

@@ -314,6 +314,7 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
       <div class="btn-row">
         <button class="btn btn-primary" id="ffStartBtn" disabled>Start Filling &rarr;</button>
         <button class="btn btn-primary hidden" id="ffNextBtn">Next Row &rarr;</button>
+        <button class="btn-outline hidden" id="ffCaptchaBtn" style="color:var(--amber);border-color:rgba(245,158,11,.35);">Solve Captcha</button>
         <button class="btn-stop hidden" id="ffStopBtn">&#x25A0; Stop</button>
         <button class="btn-export hidden" id="ffResultsBtn" onclick="ffDownloadResults()">Download Results CSV</button>
         <span class="live-badge hidden" id="ffLiveBadge">ready</span>
@@ -944,7 +945,7 @@ async function ffFillStep(pos) {
   if (pos >= ffSchedule.length) {
     ffLog(`Done \u2014 all ${ffSchedule.length} rows completed`, 'ok');
     $('ffLiveBadge').classList.remove('active'); $('ffLiveBadge').textContent = 'completed';
-    hide('ffNextBtn'); hide('ffStopBtn'); show('ffStartBtn'); show('ffResultsBtn');
+    hide('ffNextBtn'); hide('ffStopBtn'); hide('ffCaptchaBtn'); show('ffStartBtn'); show('ffResultsBtn');
     $('ffStartBtn').disabled = false; $('ffStartBtn').textContent = `Start Filling (${ffTotalRows} rows) \u2192`;
     $('ffStatus').innerHTML = '<span class="count">All rows completed</span>';
     ffActive = false;
@@ -985,8 +986,6 @@ async function ffFillStep(pos) {
     $('ffLiveBadge').textContent = `${pos + 1}/${ffSchedule.length}`;
     ffLog(`[${pos+1}/${ffSchedule.length}] ${job.name} row ${step.rowIdx+1}: ${(data.filled||[]).length} fields filled`, 'ok');
     if (data.errors?.length) for (const err of data.errors) ffLog(err, 'warn');
-    if (data.captcha_solved === true) ffLog(`Captcha solved \u2714 (${data.captcha_type}, ${data.captcha_time}s)`, 'ok');
-    else if (data.captcha_solved === false) ffLog('Captcha detected but solve failed', 'warn');
     ffLog('Review and submit, then click "Next Row"', 'info');
     $('ffStatus').innerHTML = `<span class="count">${pos+1}</span> of <span class="count">${ffSchedule.length}</span> &middot; ${esc(job.name)} row ${step.rowIdx+1}`;
 
@@ -1023,6 +1022,7 @@ async function ffStart() {
   for (const j of ffJobs) ffLog(`  ${j.name}: ${j.rowCount} rows`, 'info');
 
   ffActive = true; hide('ffStartBtn'); show('ffNextBtn'); show('ffStopBtn'); show('ffLiveBadge');
+  if ($('capKey').value.trim()) show('ffCaptchaBtn');
   $('ffLiveBadge').classList.add('active');
 
   await ffFillStep(0);
@@ -1048,8 +1048,23 @@ async function ffStop() {
   if (ffResultsData.length) show('ffResultsBtn');
   ffLog('Session stopped', 'warn'); ffActive = false;
   $('ffLiveBadge').classList.remove('active'); $('ffLiveBadge').textContent = 'stopped';
-  hide('ffNextBtn'); hide('ffStopBtn'); show('ffStartBtn');
+  hide('ffNextBtn'); hide('ffStopBtn'); hide('ffCaptchaBtn'); show('ffStartBtn');
   $('ffStartBtn').disabled = false; $('ffStartBtn').textContent = `Start Filling (${ffTotalRows} rows) \u2192`;
+}
+
+async function ffSolveCaptcha() {
+  const btn = $('ffCaptchaBtn');
+  btn.disabled = true; btn.textContent = 'Solving...';
+  ffLog('Sending captcha to CapSolver...', 'info');
+  try {
+    const res = await fetch('/filler/solve-captcha', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const data = await res.json();
+    if (data.error && !data.captcha_type) { ffLog(data.error, 'err'); }
+    else if (!data.captcha_found) { ffLog('No captcha detected on page', 'info'); }
+    else if (data.ok) { ffLog(`Captcha solved \u2714 (${data.captcha_type}, ${data.time}s) \u2014 now submit the form`, 'ok'); }
+    else { ffLog(data.error || 'Captcha solve failed \u2014 click again to retry', 'warn'); }
+  } catch (e) { ffLog('Captcha error: ' + e.message, 'err'); }
+  btn.disabled = false; btn.textContent = 'Solve Captcha';
 }
 
 function ffDownloadResults() {
@@ -1103,6 +1118,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('feBtn').addEventListener('click', runFormExtraction);
   $('ffStartBtn').addEventListener('click', ffStart);
   $('ffNextBtn').addEventListener('click', ffNext);
+  $('ffCaptchaBtn').addEventListener('click', ffSolveCaptcha);
   $('ffStopBtn').addEventListener('click', ffStop);
   $('aiKey').addEventListener('input', scheduleStatusCheck);
   $('oaiKey').addEventListener('input', scheduleStatusCheck);
