@@ -462,48 +462,51 @@ def _inject_captcha_token(driver, captcha_type, token):
         if captcha_type == 'recaptcha_v2':
             driver.execute_script("""
                 var token = arguments[0];
-                // Inject token into all g-recaptcha-response textareas
+                // Inject token into all g-recaptcha-response textareas (keep hidden)
                 document.querySelectorAll('#g-recaptcha-response, [name="g-recaptcha-response"]').forEach(function(el) {
-                    el.style.display = 'block'; el.value = token; el.style.display = 'none';
+                    el.value = token;
                 });
-                // Trigger callback — try multiple methods
+                // Trigger callback — try safe methods only
                 var called = false;
-                // Method 1: data-callback attribute
-                var widget = document.querySelector('.g-recaptcha');
-                if (widget) {
+                // Method 1: data-callback attribute on widget
+                document.querySelectorAll('.g-recaptcha[data-callback]').forEach(function(widget) {
                     var cb = widget.getAttribute('data-callback');
-                    if (cb && typeof window[cb] === 'function') { window[cb](token); called = true; }
-                }
-                // Method 2: ___grecaptcha_cfg.clients callback (handles anonymous callbacks)
+                    if (cb && typeof window[cb] === 'function') { try { window[cb](token); called = true; } catch(e) {} }
+                });
+                // Method 2: known callback paths in ___grecaptcha_cfg.clients
                 if (!called) {
                     try {
                         var clients = ___grecaptcha_cfg.clients;
                         for (var i in clients) {
                             var c = clients[i];
-                            // Walk the client object looking for callback functions
                             for (var k1 in c) {
-                                if (typeof c[k1] === 'object' && c[k1] !== null) {
-                                    for (var k2 in c[k1]) {
-                                        if (typeof c[k1][k2] === 'object' && c[k1][k2] !== null) {
-                                            for (var k3 in c[k1][k2]) {
-                                                if (typeof c[k1][k2][k3] === 'function') {
-                                                    try { c[k1][k2][k3](token); called = true; } catch(e) {}
-                                                }
-                                            }
-                                        }
+                                if (typeof c[k1] !== 'object' || c[k1] === null) continue;
+                                for (var k2 in c[k1]) {
+                                    if (typeof c[k1][k2] !== 'object' || c[k1][k2] === null) continue;
+                                    // Only call properties named 'callback' or 'promise-callback'
+                                    if (typeof c[k1][k2].callback === 'function') {
+                                        try { c[k1][k2].callback(token); called = true; } catch(e) {}
+                                    }
+                                    if (typeof c[k1][k2]['promise-callback'] === 'function') {
+                                        try { c[k1][k2]['promise-callback'](token); called = true; } catch(e) {}
                                     }
                                 }
                             }
                         }
                     } catch(e) {}
                 }
-                // Dismiss challenge overlay if visible
+                // Method 3: common global callback names
+                if (!called) {
+                    var names = ['onRecaptchaSuccess', 'recaptchaCallback', 'onSubmit', 'onCaptchaSuccess'];
+                    for (var n = 0; n < names.length; n++) {
+                        if (typeof window[names[n]] === 'function') { try { window[names[n]](token); } catch(e) {} }
+                    }
+                }
+                // Close modals/overlays that might contain the captcha
                 try {
+                    document.querySelectorAll('.ui-dialog-titlebar-close, [data-dismiss="modal"], .modal .close, .dialog-close, .close-dialog').forEach(function(b) { try { b.click(); } catch(e) {} });
                     var overlay = document.querySelector('iframe[src*="recaptcha/api2/bframe"]');
-                    if (overlay) overlay.parentElement.parentElement.style.display = 'none';
-                    // Also hide the backdrop
-                    var backdrops = document.querySelectorAll('div[style*="visibility: visible"][style*="position: fixed"]');
-                    backdrops.forEach(function(el) { if (el.querySelector('iframe[src*="recaptcha"]')) el.style.display = 'none'; });
+                    if (overlay) { var p = overlay.parentElement; while (p && p !== document.body) { if (p.style.position === 'fixed' || getComputedStyle(p).position === 'fixed') { p.style.display = 'none'; break; } p = p.parentElement; } }
                 } catch(e) {}
             """, token)
         elif captcha_type == 'hcaptcha':
