@@ -223,13 +223,20 @@ def _show_splash_and_launch():
     import tkinter as tk
     import threading
 
-    W, H = 480, 260
+    BG = "#1a0a1e"
+    SURFACE = "#2a1230"
+    PINK = "#ff69b4"
+    MUTED = "#a070a0"
+    DIM = "#4a2250"
+
+    W, H = 420, 200
     root = tk.Tk()
     root.title("BubbleGum")
     root.geometry(f"{W}x{H}")
     root.resizable(False, False)
-    root.overrideredirect(True)  # no title bar
+    root.overrideredirect(True)
     root.attributes('-topmost', True)
+    root.configure(bg=BG)
 
     # Center on screen
     root.update_idletasks()
@@ -247,64 +254,53 @@ def _show_splash_and_launch():
     except Exception:
         pass
 
-    # Dark gradient background using canvas
-    canvas = tk.Canvas(root, width=W, height=H, highlightthickness=0, bd=0)
-    canvas.pack(fill="both", expand=True)
+    # Logo row: pink circle + title
+    top = tk.Frame(root, bg=BG)
+    top.pack(pady=(32, 0))
 
-    # Draw gradient background (dark purple to darker)
-    for i in range(H):
-        r = int(26 - (i / H) * 10)
-        g = int(10 - (i / H) * 6)
-        b = int(30 + (i / H) * 10)
-        color = f'#{max(r,0):02x}{max(g,0):02x}{min(b,40):02x}'
-        canvas.create_line(0, i, W, i, fill=color)
+    bubble = tk.Canvas(top, width=44, height=44, bg=BG, highlightthickness=0)
+    bubble.pack(side="left", padx=(0, 12))
+    bubble.create_oval(4, 4, 40, 40, fill=PINK, outline="#ff8cc8", width=2)
+    bubble.create_text(22, 22, text="\U0001F9CB", font=("Segoe UI", 14))
 
-    # Subtle glow circle
-    canvas.create_oval(W//2 - 120, 20, W//2 + 120, 160,
-                       fill='', outline='', width=0)
-
-    # Logo bubble
-    canvas.create_oval(W//2 - 90, 30, W//2 - 50, 70,
-                       fill='#ff69b4', outline='#ff8cc8', width=2)
-    canvas.create_text(W//2 - 70, 50, text='\U0001F9CB', font=("Segoe UI", 16))
-
-    # Title
-    canvas.create_text(W//2 + 10, 50, text="BubbleGum",
-                       font=("Segoe UI", 32, "bold"), fill="#ff69b4", anchor="w")
+    tk.Label(top, text="BubbleGum", font=("Segoe UI", 28, "bold"),
+             fg=PINK, bg=BG).pack(side="left")
 
     # Tagline
-    canvas.create_text(W//2, 95, text="Intelligent Form Automation",
-                       font=("Segoe UI", 12), fill="#a070a0")
-
-    # Version
-    canvas.create_text(W - 20, H - 15, text="v4.0",
-                       font=("Segoe UI", 9), fill="#4a2250", anchor="e")
+    tk.Label(root, text="Intelligent Form Automation",
+             font=("Segoe UI", 10), fg=MUTED, bg=BG).pack(pady=(4, 0))
 
     # Status text
     status_var = tk.StringVar(value="Starting...")
-    status_label = tk.Label(root, textvariable=status_var,
-                            font=("Segoe UI", 10), fg="#d4a0d0",
-                            bg="#1a1a2e", bd=0)
-    status_label.place(x=W//2, y=145, anchor="center")
+    tk.Label(root, textvariable=status_var,
+             font=("Segoe UI", 10), fg="#d4a0d0", bg=BG).pack(pady=(18, 0))
 
-    # Progress bar background
-    bar_x, bar_y, bar_w, bar_h = 60, 175, W - 120, 5
-    canvas.create_rectangle(bar_x, bar_y, bar_x + bar_w, bar_y + bar_h,
-                            fill="#2a1230", outline="#3a1a40", width=1)
-    # Progress bar fill (will be updated)
-    bar_fill_id = canvas.create_rectangle(bar_x, bar_y, bar_x, bar_y + bar_h,
-                                          fill="#ff69b4", outline="", width=0)
+    # Progress bar (canvas for precise control)
+    bar_w, bar_h = W - 120, 5
+    bar_canvas = tk.Canvas(root, width=bar_w, height=bar_h,
+                           bg=SURFACE, highlightthickness=0, bd=0)
+    bar_canvas.pack(pady=(10, 0))
+    bar_fill = bar_canvas.create_rectangle(0, 0, 0, bar_h, fill=PINK, outline="")
 
-    # Powered by line
-    canvas.create_text(W//2, H - 15, text="powered by Selenium + AI",
-                       font=("Segoe UI", 8), fill="#3a1a40")
+    # Footer
+    foot = tk.Frame(root, bg=BG)
+    foot.pack(side="bottom", fill="x", pady=(0, 8), padx=20)
+    tk.Label(foot, text="powered by Selenium + AI",
+             font=("Segoe UI", 8), fg=DIM, bg=BG).pack(side="left")
+    tk.Label(foot, text="v4.0",
+             font=("Segoe UI", 8), fg=DIM, bg=BG).pack(side="right")
 
+    # Thread-safe UI update via root.after()
     def set_status(msg, pct=0):
+        def _update():
+            try:
+                status_var.set(msg)
+                fill_px = int((bar_w * pct) / 100)
+                bar_canvas.coords(bar_fill, 0, 0, fill_px, bar_h)
+            except Exception:
+                pass
         try:
-            status_var.set(msg)
-            fill_w = int((bar_w * pct) / 100)
-            canvas.coords(bar_fill_id, bar_x, bar_y, bar_x + fill_w, bar_y + bar_h)
-            root.update_idletasks()
+            root.after(0, _update)
         except Exception:
             pass
 
@@ -321,19 +317,15 @@ def _show_splash_and_launch():
             set_status("Starting server...", 75)
             server = start_server()  # noqa: F821
 
-            set_status("Opening browser...", 90)
-            url = f"http://127.0.0.1:{PORT}/bubblegum.html"
-            time.sleep(0.3)
-            webbrowser.open(url)
-
-            set_status("Ready!", 100)
-            time.sleep(0.5)
-
-            # Close splash
+            # Close splash BEFORE opening browser — no overlap
             try:
-                root.destroy()
+                root.after(0, root.destroy)
             except Exception:
                 pass
+            time.sleep(0.3)
+
+            url = f"http://127.0.0.1:{PORT}/bubblegum.html"
+            webbrowser.open(url)
 
             # Keep server alive
             server.serve_forever()
@@ -342,7 +334,7 @@ def _show_splash_and_launch():
             set_status(f"Error: {e}", 0)
             time.sleep(5)
             try:
-                root.destroy()
+                root.after(0, root.destroy)
             except Exception:
                 pass
             os._exit(1)
@@ -351,7 +343,7 @@ def _show_splash_and_launch():
     t.start()
     root.mainloop()
 
-    # If splash was closed manually (X button), keep running until server dies
+    # Keep running until server thread dies
     t.join()
 
 
