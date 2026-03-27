@@ -310,6 +310,7 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
       <div class="btn-row">
         <button class="btn btn-primary" id="ffStartBtn" disabled>Start Filling &rarr;</button>
         <button class="btn btn-primary hidden" id="ffNextBtn">Next Row &rarr;</button>
+        <button class="btn-outline hidden" id="ffCaptchaBtn" style="color:var(--amber);border-color:rgba(245,158,11,.35);">Trigger Captcha</button>
         <button class="btn-stop hidden" id="ffStopBtn">&#x25A0; Stop</button>
         <button class="btn-export hidden" id="ffResultsBtn" onclick="ffDownloadResults()">Download Results CSV</button>
         <span class="live-badge hidden" id="ffLiveBadge">ready</span>
@@ -939,7 +940,7 @@ async function ffFillStep(pos) {
   if (pos >= ffSchedule.length) {
     ffLog(`Done \u2014 all ${ffSchedule.length} rows completed`, 'ok');
     $('ffLiveBadge').classList.remove('active'); $('ffLiveBadge').textContent = 'completed';
-    hide('ffNextBtn'); hide('ffStopBtn'); show('ffStartBtn'); show('ffResultsBtn');
+    hide('ffNextBtn'); hide('ffCaptchaBtn'); hide('ffStopBtn'); show('ffStartBtn'); show('ffResultsBtn');
     $('ffStartBtn').disabled = false; $('ffStartBtn').textContent = `Start Filling (${ffTotalRows} rows) \u2192`;
     $('ffStatus').innerHTML = '<span class="count">All rows completed</span>';
     ffActive = false;
@@ -1014,7 +1015,7 @@ async function ffStart() {
   ffLog(`Starting: ${ffJobs.length} sites, ${ffSchedule.length} rows (round-robin)`, 'info');
   for (const j of ffJobs) ffLog(`  ${j.name}: ${j.rowCount} rows`, 'info');
 
-  ffActive = true; hide('ffStartBtn'); show('ffNextBtn'); show('ffStopBtn'); show('ffLiveBadge');
+  ffActive = true; hide('ffStartBtn'); show('ffNextBtn'); show('ffCaptchaBtn'); show('ffStopBtn'); show('ffLiveBadge');
   $('ffLiveBadge').classList.add('active');
 
   await ffFillStep(0);
@@ -1040,8 +1041,21 @@ async function ffStop() {
   if (ffResultsData.length) show('ffResultsBtn');
   ffLog('Session stopped', 'warn'); ffActive = false;
   $('ffLiveBadge').classList.remove('active'); $('ffLiveBadge').textContent = 'stopped';
-  hide('ffNextBtn'); hide('ffStopBtn'); show('ffStartBtn');
+  hide('ffNextBtn'); hide('ffCaptchaBtn'); hide('ffStopBtn'); show('ffStartBtn');
   $('ffStartBtn').disabled = false; $('ffStartBtn').textContent = `Start Filling (${ffTotalRows} rows) \u2192`;
+}
+
+async function ffTriggerCaptcha() {
+  const btn = $('ffCaptchaBtn');
+  btn.disabled = true; btn.textContent = 'Clicking...';
+  ffLog('Clicking captcha checkbox...', 'info');
+  try {
+    const res = await fetch('/filler/trigger-captcha', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const data = await res.json();
+    if (data.ok) { ffLog(data.message + ' \u2014 extension should auto-solve now', 'ok'); }
+    else { ffLog(data.message || 'No captcha found', 'warn'); }
+  } catch (e) { ffLog('Error: ' + e.message, 'err'); }
+  btn.disabled = false; btn.textContent = 'Trigger Captcha';
 }
 
 function ffDownloadResults() {
@@ -1094,6 +1108,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('feBtn').addEventListener('click', runFormExtraction);
   $('ffStartBtn').addEventListener('click', ffStart);
   $('ffNextBtn').addEventListener('click', ffNext);
+  $('ffCaptchaBtn').addEventListener('click', ffTriggerCaptcha);
   $('ffStopBtn').addEventListener('click', ffStop);
   $('aiKey').addEventListener('input', scheduleStatusCheck);
   $('oaiKey').addEventListener('input', scheduleStatusCheck);

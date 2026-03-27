@@ -252,6 +252,10 @@ def _get_filler_driver():
         'Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
     )
 
+    # Persistent profile so extension settings survive between sessions
+    profile_dir = str(APP_DIR / "edge_profile")
+    opts.add_argument(f'--user-data-dir={profile_dir}')
+
     # Load CapSolver browser extension for auto captcha solving
     ext_path = _get_capsolver_extension_path()
     if ext_path:
@@ -673,6 +677,8 @@ class QuietHandler(SimpleHTTPRequestHandler):
             self._handle_filler_next()
         elif parsed.path == '/filler/stop':
             self._handle_filler_stop()
+        elif parsed.path == '/filler/trigger-captcha':
+            self._handle_trigger_captcha()
         else:
             self.send_error(404)
 
@@ -1051,6 +1057,42 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
         result['url_changed'] = url_changed
         self._send_json(200, result)
+
+    def _handle_trigger_captcha(self):
+        """Click the reCAPTCHA/hCaptcha checkbox to make captcha visible for extension."""
+        if not _filler_driver:
+            self._send_json(400, {"error": "No browser open"})
+            return
+        try:
+            from selenium.webdriver.common.by import By
+            with _filler_lock:
+                # Try reCAPTCHA iframe
+                iframes = _filler_driver.find_elements(By.CSS_SELECTOR, 'iframe[src*="recaptcha/api2/anchor"]')
+                if iframes:
+                    _filler_driver.switch_to.frame(iframes[0])
+                    checkbox = _filler_driver.find_element(By.CSS_SELECTOR, '.recaptcha-checkbox-border, #recaptcha-anchor')
+                    checkbox.click()
+                    _filler_driver.switch_to.default_content()
+                    self._send_json(200, {"ok": True, "message": "Clicked reCAPTCHA checkbox"})
+                    return
+
+                # Try hCaptcha iframe
+                iframes = _filler_driver.find_elements(By.CSS_SELECTOR, 'iframe[src*="hcaptcha.com"]')
+                if iframes:
+                    _filler_driver.switch_to.frame(iframes[0])
+                    checkbox = _filler_driver.find_element(By.CSS_SELECTOR, '#checkbox')
+                    checkbox.click()
+                    _filler_driver.switch_to.default_content()
+                    self._send_json(200, {"ok": True, "message": "Clicked hCaptcha checkbox"})
+                    return
+
+                self._send_json(200, {"ok": False, "message": "No captcha checkbox found on page"})
+        except Exception as e:
+            try:
+                _filler_driver.switch_to.default_content()
+            except Exception:
+                pass
+            self._send_json(200, {"ok": False, "message": str(e)[:200]})
 
     def _handle_filler_stop(self):
         """Stop the filling session and close browser."""
