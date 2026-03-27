@@ -668,10 +668,10 @@ async function runGenerate() {
   status.textContent = 'Calling AI...';
   status.style.color = 'var(--amber)';
 
-  // Build field description using name attributes as primary identifiers
+  // Build field description using labels (unique) + names (for AI mapping context)
   const pageUrl = $('feUrl').value.trim();
   const fieldLines = fields.map(f => {
-    let line = `- name="${f.name || '?'}" label="${f.label || ''}" type: ${f.type || 'text'}`;
+    let line = `- "${f.label || f.name || 'unknown'}" (html name="${f.name || '?'}") type: ${f.type || 'text'}`;
     if (f.required) line += ' [REQUIRED]';
     if (f.options && f.options.length) line += ` options: ${f.options.slice(0, 30).join(', ')}`;
     if (f.placeholder) line += ` placeholder: ${f.placeholder}`;
@@ -682,12 +682,13 @@ async function runGenerate() {
 
 TARGET URL: ${pageUrl}
 
-FORM FIELDS (name attribute = what the form uses internally):
+FORM FIELDS:
 ${fieldLines}
 
 RULES:
-- CSV column headers MUST be the exact field name="" attributes listed above (NOT the labels)
+- CSV column headers MUST be the field LABELS (the quoted text before each field). Labels are unique; html name attributes may repeat (e.g. "address" appears twice for present and permanent).
 - First column MUST be "url" with the value "${pageUrl}" on EVERY row
+- Skip honeypot fields, captcha fields, and hidden system fields — do NOT include them as columns
 - Generate data for an average US adult — realistic names, US phone formats, US addresses, real-sounding emails
 - For dropdown/select fields, ONLY use values from the provided options list exactly as written
 - For checkbox/radio fields, use appropriate yes/no or true/false values
