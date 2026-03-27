@@ -155,7 +155,7 @@ _filler_ai_key = ""
 _filler_oai_key = ""
 _filler_ai_model = ""
 _filler_field_maps = {}    # {url: {csv_col: element_id}} — AI mapping cache
-_captcha_api_key = ""      # CapSolver API key for auto-solving captchas
+_captcha_api_key = "CAP-ED5F5BC298ACD06F27102102B73F5F4F4D5ED5187C2A57D42A43FA4100C85B0F"
 
 
 def _get_filler_driver():
@@ -645,14 +645,55 @@ def _fill_current_row():
                 else:
                     errors.append(f"File not found: {value}")
 
+            elif input_type in ('date', 'datetime-local', 'month', 'week', 'time'):
+                # Date/time inputs: use JS to bypass picker widgets
+                try:
+                    driver.execute_script(
+                        "arguments[0].value = arguments[1];"
+                        "arguments[0].dispatchEvent(new Event('input', {bubbles:true}));"
+                        "arguments[0].dispatchEvent(new Event('change', {bubbles:true}));"
+                        "arguments[0].blur();",
+                        el, value
+                    )
+                except Exception:
+                    try:
+                        el.clear()
+                        el.send_keys(value)
+                    except Exception as e2:
+                        errors.append(f"Error filling date {col_name}: {str(e2)[:100]}")
+                        continue
+                filled.append(col_name)
+
             else:
-                # text, email, tel, url, number, date, textarea, etc.
+                # text, email, tel, url, number, textarea, etc.
+                # For fields with datepicker class or pikaday, use JS first
+                try:
+                    has_picker = driver.execute_script(
+                        "var el = arguments[0]; var cls = (el.className || '') + ' ' + (el.getAttribute('data-type') || '');"
+                        "return /date|pikaday|calendar|datepick/i.test(cls) || el.getAttribute('type') === 'date';",
+                        el
+                    )
+                except Exception:
+                    has_picker = False
+
+                if has_picker:
+                    try:
+                        driver.execute_script(
+                            "arguments[0].value = arguments[1];"
+                            "arguments[0].dispatchEvent(new Event('input', {bubbles:true}));"
+                            "arguments[0].dispatchEvent(new Event('change', {bubbles:true}));"
+                            "arguments[0].blur();",
+                            el, value
+                        )
+                        filled.append(col_name)
+                        continue
+                    except Exception:
+                        pass
+
                 try:
                     el.clear()
                     el.send_keys(value)
                 except Exception:
-                    # Fallback: use JS to set value directly
-                    # Handles date pickers, hidden fields, readonly fields
                     try:
                         driver.execute_script(
                             "arguments[0].value = arguments[1];"

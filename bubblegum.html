@@ -230,10 +230,6 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
         </optgroup>
       </select>
     </div>
-    <div class="field">
-      <label>CapSolver API Key <span class="opt">auto-solves captchas</span></label>
-      <input type="password" id="capKey" placeholder="CAP-..." autocomplete="off">
-    </div>
   </div>
 
   <!-- TAB 1: FORM EXTRACTOR -->
@@ -402,7 +398,6 @@ async function checkStatus() {
   localStorage.setItem('bg_aiKey', aiKey);
   localStorage.setItem('bg_oaiKey', oaiKey);
   localStorage.setItem('bg_model', $('modelSelect').value);
-  localStorage.setItem('bg_capKey', $('capKey').value.trim());
 
   const aiDot = $('aiDot'), aiText = $('aiText');
   if (!aiKey) { aiDot.className = 'sdot'; aiText.className = 'stext'; aiText.textContent = 'no key'; }
@@ -972,7 +967,7 @@ async function ffFillStep(pos) {
         ai_key: $('aiKey').value.trim(),
         oai_key: $('oaiKey').value.trim(),
         ai_model: $('modelSelect').value,
-        captcha_key: $('capKey').value.trim()
+        captcha_key: ''
       })
     });
     const data = await res.json();
@@ -988,6 +983,9 @@ async function ffFillStep(pos) {
     if (data.errors?.length) for (const err of data.errors) ffLog(err, 'warn');
     ffLog('Review and submit, then click "Next Row"', 'info');
     $('ffStatus').innerHTML = `<span class="count">${pos+1}</span> of <span class="count">${ffSchedule.length}</span> &middot; ${esc(job.name)} row ${step.rowIdx+1}`;
+
+    // Auto-trigger captcha solve in background so it's working while user reviews
+    ffSolveCaptcha();
 
     ffResultsData.push({
       row: pos + 1,
@@ -1021,8 +1019,7 @@ async function ffStart() {
   ffLog(`Starting: ${ffJobs.length} sites, ${ffSchedule.length} rows (round-robin)`, 'info');
   for (const j of ffJobs) ffLog(`  ${j.name}: ${j.rowCount} rows`, 'info');
 
-  ffActive = true; hide('ffStartBtn'); show('ffNextBtn'); show('ffStopBtn'); show('ffLiveBadge');
-  if ($('capKey').value.trim()) show('ffCaptchaBtn');
+  ffActive = true; hide('ffStartBtn'); show('ffNextBtn'); show('ffStopBtn'); show('ffLiveBadge'); show('ffCaptchaBtn');
   $('ffLiveBadge').classList.add('active');
 
   await ffFillStep(0);
@@ -1108,7 +1105,6 @@ function switchFeMode(mode) {
 document.addEventListener('DOMContentLoaded', () => {
   $('aiKey').value = localStorage.getItem('bg_aiKey') || '';
   $('oaiKey').value = localStorage.getItem('bg_oaiKey') || '';
-  $('capKey').value = localStorage.getItem('bg_capKey') || '';
   const sm = localStorage.getItem('bg_model'); if (sm) $('modelSelect').value = sm;
 
   $('tabExtractor').addEventListener('click', () => switchTab('extractor'));
