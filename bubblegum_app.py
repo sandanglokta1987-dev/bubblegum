@@ -155,6 +155,7 @@ _filler_ai_key = ""
 _filler_oai_key = ""
 _filler_ai_model = ""
 _filler_field_maps = {}    # {url: {csv_col: element_id}} — AI mapping cache
+_captcha_api_key = ""      # CapSolver API key for auto-solving captchas
 
 
 def _get_filler_driver():
@@ -352,6 +353,158 @@ RULES:
     return mapping
 
 
+def _detect_captcha(driver):
+    """Detect captcha on page. Returns (type, sitekey) or (None, None)."""
+    try:
+        result = driver.execute_script("""
+            // reCAPTCHA v2
+            let el = document.querySelector('.g-recaptcha[data-sitekey]');
+            if (el) return {type: 'recaptcha_v2', sitekey: el.getAttribute('data-sitekey')};
+            // reCAPTCHA v2 invisible
+            el = document.querySelector('[data-sitekey][data-size="invisible"]');
+            if (el) return {type: 'recaptcha_v2', sitekey: el.getAttribute('data-sitekey')};
+            // reCAPTCHA via iframe
+            let iframe = document.querySelector('iframe[src*="recaptcha/api2"]');
+            if (iframe) {
+                let m = iframe.src.match(/[?&]k=([^&]+)/);
+                if (m) return {type: 'recaptcha_v2', sitekey: m[1]};
+            }
+            // hCaptcha
+            el = document.querySelector('.h-captcha[data-sitekey]');
+            if (el) return {type: 'hcaptcha', sitekey: el.getAttribute('data-sitekey')};
+            // Cloudflare Turnstile
+            el = document.querySelector('.cf-turnstile[data-sitekey]');
+            if (el) return {type: 'turnstile', sitekey: el.getAttribute('data-sitekey')};
+            return null;
+        """)
+        if result:
+            return result.get('type'), result.get('sitekey')
+    except Exception:
+        pass
+    return None, None
+
+
+def _solve_captcha(captcha_type, sitekey, page_url):
+    """Send captcha to CapSolver and poll for solution. Returns token or None."""
+    if not _captcha_api_key or not sitekey:
+        return None
+
+    task_types = {
+        'recaptcha_v2': 'ReCaptchaV2TaskProxyLess',
+        'hcaptcha': 'HCaptchaTaskProxyless',
+        'turnstile': 'AntiTurnstileTaskProxyLess',
+    }
+    task_type = task_types.get(captcha_type)
+    if not task_type:
+        return None
+
+    ctx = ssl.create_default_context()
+
+    # Create task
+    task_data = {
+        "clientKey": _captcha_api_key,
+        "task": {
+            "type": task_type,
+            "websiteURL": page_url,
+            "websiteKey": sitekey
+        }
+    }
+    try:
+        req = urllib.request.Request(
+            "https://api.capsolver.com/createTask",
+            data=json.dumps(task_data).encode(),
+            headers={"Content-Type": "application/json"},
+            method='POST'
+        )
+        resp = urllib.request.urlopen(req, timeout=15, context=ctx)
+        result = json.loads(resp.read().decode())
+        task_id = result.get("taskId")
+        if not task_id:
+            print(f"[captcha] Create task failed: {result}", flush=True)
+            return None
+    except Exception as e:
+        print(f"[captcha] Create task error: {e}", flush=True)
+        return None
+
+    # Poll for result (max 120 seconds)
+    poll_data = {"clientKey": _captcha_api_key, "taskId": task_id}
+    for _ in range(60):
+        time.sleep(2)
+        try:
+            req = urllib.request.Request(
+                "https://api.capsolver.com/getTaskResult",
+                data=json.dumps(poll_data).encode(),
+                headers={"Content-Type": "application/json"},
+                method='POST'
+            )
+            resp = urllib.request.urlopen(req, timeout=15, context=ctx)
+            result = json.loads(resp.read().decode())
+            status = result.get("status")
+            if status == "ready":
+                token = result.get("solution", {}).get("gRecaptchaResponse") or \
+                        result.get("solution", {}).get("token")
+                print(f"[captcha] Solved ({captcha_type})", flush=True)
+                return token
+            if status not in ("idle", "processing"):
+                print(f"[captcha] Unexpected status: {result}", flush=True)
+                return None
+        except Exception as e:
+            print(f"[captcha] Poll error: {e}", flush=True)
+            return None
+
+    print("[captcha] Timed out", flush=True)
+    return None
+
+
+def _inject_captcha_token(driver, captcha_type, token):
+    """Inject solved captcha token into the page."""
+    try:
+        if captcha_type == 'recaptcha_v2':
+            driver.execute_script("""
+                var ta = document.getElementById('g-recaptcha-response');
+                if (ta) { ta.style.display = 'block'; ta.value = arguments[0]; ta.style.display = 'none'; }
+                // Also try all g-recaptcha-response textareas (some forms have multiple)
+                document.querySelectorAll('[name="g-recaptcha-response"]').forEach(function(el) {
+                    el.value = arguments[0];
+                });
+                // Trigger callback if defined
+                var widget = document.querySelector('.g-recaptcha');
+                if (widget) {
+                    var cb = widget.getAttribute('data-callback');
+                    if (cb && typeof window[cb] === 'function') window[cb](arguments[0]);
+                }
+                // Try grecaptcha object
+                if (typeof grecaptcha !== 'undefined' && grecaptcha.getResponse) {
+                    try { grecaptcha.execute(); } catch(e) {}
+                }
+            """, token)
+        elif captcha_type == 'hcaptcha':
+            driver.execute_script("""
+                var ta = document.querySelector('[name="h-captcha-response"]');
+                if (ta) ta.value = arguments[0];
+                document.querySelectorAll('[name="g-recaptcha-response"]').forEach(function(el) {
+                    el.value = arguments[0];
+                });
+                var widget = document.querySelector('.h-captcha');
+                if (widget) {
+                    var cb = widget.getAttribute('data-callback');
+                    if (cb && typeof window[cb] === 'function') window[cb](arguments[0]);
+                }
+            """, token)
+        elif captcha_type == 'turnstile':
+            driver.execute_script("""
+                var ta = document.querySelector('[name="cf-turnstile-response"]');
+                if (ta) ta.value = arguments[0];
+                document.querySelectorAll('input[name="cf-turnstile-response"]').forEach(function(el) {
+                    el.value = arguments[0];
+                });
+            """, token)
+        return True
+    except Exception as e:
+        print(f"[captcha] Inject error: {e}", flush=True)
+        return False
+
+
 def _fill_current_row():
     """Fill the current row's data into the form. Returns status dict."""
     global _filler_data, _filler_index, _filler_driver
@@ -492,7 +645,22 @@ def _fill_current_row():
     if url_col and url_col in row:
         row_url = row[url_col]
 
-    return {
+    # Auto-solve captcha if key is set
+    captcha_info = {}
+    if _captcha_api_key and _filler_driver:
+        ctype, skey = _detect_captcha(_filler_driver)
+        if ctype and skey:
+            captcha_info['captcha_type'] = ctype
+            t0 = time.time()
+            token = _solve_captcha(ctype, skey, row_url)
+            if token:
+                _inject_captcha_token(_filler_driver, ctype, token)
+                captcha_info['captcha_solved'] = True
+                captcha_info['captcha_time'] = round(time.time() - t0, 1)
+            else:
+                captcha_info['captcha_solved'] = False
+
+    result = {
         "ok": True,
         "row": _filler_index + 1,
         "total": len(_filler_data),
@@ -501,6 +669,8 @@ def _fill_current_row():
         "remaining": len(_filler_data) - _filler_index - 1,
         "url": row_url
     }
+    result.update(captcha_info)
+    return result
 
 
 # ── HTTP Server ──────────────────────────────────────────────────────────────
@@ -785,6 +955,7 @@ class QuietHandler(SimpleHTTPRequestHandler):
         If no URL column, a 'url' field in the JSON is used as fallback."""
         global _filler_data, _filler_index, _filler_url, _filler_url_col, _filler_results
         global _filler_ai_key, _filler_oai_key, _filler_ai_model, _filler_field_maps
+        global _captcha_api_key
 
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length)
@@ -805,6 +976,8 @@ class QuietHandler(SimpleHTTPRequestHandler):
             _filler_oai_key = data['oai_key']
         if data.get('ai_model'):
             _filler_ai_model = data['ai_model']
+        if data.get('captcha_key'):
+            _captcha_api_key = data['captcha_key']
 
         if not csv_text:
             self._send_json(400, {"error": "Missing csv_data"})
