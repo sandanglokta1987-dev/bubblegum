@@ -461,22 +461,50 @@ def _inject_captcha_token(driver, captcha_type, token):
     try:
         if captcha_type == 'recaptcha_v2':
             driver.execute_script("""
-                var ta = document.getElementById('g-recaptcha-response');
-                if (ta) { ta.style.display = 'block'; ta.value = arguments[0]; ta.style.display = 'none'; }
-                // Also try all g-recaptcha-response textareas (some forms have multiple)
-                document.querySelectorAll('[name="g-recaptcha-response"]').forEach(function(el) {
-                    el.value = arguments[0];
+                var token = arguments[0];
+                // Inject token into all g-recaptcha-response textareas
+                document.querySelectorAll('#g-recaptcha-response, [name="g-recaptcha-response"]').forEach(function(el) {
+                    el.style.display = 'block'; el.value = token; el.style.display = 'none';
                 });
-                // Trigger callback if defined
+                // Trigger callback — try multiple methods
+                var called = false;
+                // Method 1: data-callback attribute
                 var widget = document.querySelector('.g-recaptcha');
                 if (widget) {
                     var cb = widget.getAttribute('data-callback');
-                    if (cb && typeof window[cb] === 'function') window[cb](arguments[0]);
+                    if (cb && typeof window[cb] === 'function') { window[cb](token); called = true; }
                 }
-                // Try grecaptcha object
-                if (typeof grecaptcha !== 'undefined' && grecaptcha.getResponse) {
-                    try { grecaptcha.execute(); } catch(e) {}
+                // Method 2: ___grecaptcha_cfg.clients callback (handles anonymous callbacks)
+                if (!called) {
+                    try {
+                        var clients = ___grecaptcha_cfg.clients;
+                        for (var i in clients) {
+                            var c = clients[i];
+                            // Walk the client object looking for callback functions
+                            for (var k1 in c) {
+                                if (typeof c[k1] === 'object' && c[k1] !== null) {
+                                    for (var k2 in c[k1]) {
+                                        if (typeof c[k1][k2] === 'object' && c[k1][k2] !== null) {
+                                            for (var k3 in c[k1][k2]) {
+                                                if (typeof c[k1][k2][k3] === 'function') {
+                                                    try { c[k1][k2][k3](token); called = true; } catch(e) {}
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch(e) {}
                 }
+                // Dismiss challenge overlay if visible
+                try {
+                    var overlay = document.querySelector('iframe[src*="recaptcha/api2/bframe"]');
+                    if (overlay) overlay.parentElement.parentElement.style.display = 'none';
+                    // Also hide the backdrop
+                    var backdrops = document.querySelectorAll('div[style*="visibility: visible"][style*="position: fixed"]');
+                    backdrops.forEach(function(el) { if (el.querySelector('iframe[src*="recaptcha"]')) el.style.display = 'none'; });
+                } catch(e) {}
             """, token)
         elif captcha_type == 'hcaptcha':
             driver.execute_script("""
