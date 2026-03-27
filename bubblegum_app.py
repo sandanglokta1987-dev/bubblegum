@@ -666,13 +666,22 @@ def _fill_current_row():
 
             else:
                 # text, email, tel, url, number, textarea, etc.
-                # For fields with datepicker class or pikaday, use JS first
+                # Detect date/calendar fields — Ninja Forms pikaday, flatpickr, etc.
                 try:
-                    has_picker = driver.execute_script(
-                        "var el = arguments[0]; var cls = (el.className || '') + ' ' + (el.getAttribute('data-type') || '');"
-                        "return /date|pikaday|calendar|datepick/i.test(cls) || el.getAttribute('type') === 'date';",
-                        el
-                    )
+                    has_picker = driver.execute_script("""
+                        var el = arguments[0];
+                        var cls = (el.className || '') + ' ' + (el.getAttribute('data-type') || '');
+                        if (/date|pikaday|calendar|datepick|flatpickr/i.test(cls)) return true;
+                        if (el.getAttribute('type') === 'date') return true;
+                        if (el.hasAttribute('data-pikaday')) return true;
+                        // Ninja Forms: check parent container for pika-single
+                        var container = el.closest('.nf-field-container, .field-wrap, .form-group');
+                        if (container && container.querySelector('.pika-single, .flatpickr-calendar')) return true;
+                        if (el.parentElement && el.parentElement.querySelector('.pika-single, .flatpickr-calendar')) return true;
+                        // Check if element has a _flatpickr or pikaday instance
+                        if (el._flatpickr || el._pikaday) return true;
+                        return false;
+                    """, el)
                 except Exception:
                     has_picker = False
 
