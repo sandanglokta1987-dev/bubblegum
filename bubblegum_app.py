@@ -544,8 +544,6 @@ class QuietHandler(SimpleHTTPRequestHandler):
             self._handle_filler_next()
         elif parsed.path == '/filler/stop':
             self._handle_filler_stop()
-        elif parsed.path == '/generate-data':
-            self._handle_generate_data()
         else:
             self.send_error(404)
 
@@ -563,91 +561,6 @@ class QuietHandler(SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         self.wfile.write(body)
-
-    # ── AI Data Generation ──────────────────────────────────────
-
-    def _handle_generate_data(self):
-        """Generate realistic CSV data from extracted form fields using AI."""
-        content_length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(content_length)
-        try:
-            data = json.loads(body)
-        except Exception:
-            self._send_json(400, {"error": "Invalid JSON"})
-            return
-
-        fields = data.get('fields', [])
-        row_count = data.get('row_count', 50)
-        instructions = data.get('instructions', '').strip()
-        ai_key = data.get('ai_key', '')
-        oai_key = data.get('oai_key', '')
-        ai_model = data.get('ai_model', 'claude-sonnet-4-20250514')
-
-        if not fields:
-            self._send_json(400, {"error": "No fields provided"})
-            return
-
-        # Build field description for the prompt
-        field_desc_lines = []
-        for f in fields:
-            parts = [f"- {f.get('label', '') or f.get('name', 'unknown')}"]
-            if f.get('name'):
-                parts.append(f"(name: {f['name']})")
-            parts.append(f"type: {f.get('type', 'text')}")
-            if f.get('required'):
-                parts.append("[REQUIRED]")
-            if f.get('options') and len(f['options']) > 0:
-                parts.append(f"options: {', '.join(f['options'][:30])}")
-            if f.get('placeholder'):
-                parts.append(f"placeholder: {f['placeholder']}")
-            field_desc_lines.append(' '.join(parts))
-        field_desc = '\n'.join(field_desc_lines)
-
-        prompt = f"""Generate exactly {row_count} rows of realistic, randomly varied form submission data as a CSV.
-
-FORM FIELDS:
-{field_desc}
-
-RULES:
-- First row must be CSV headers (use the field name/label as column header)
-- Generate data for an average US adult — realistic names, US phone formats, US addresses, real-sounding emails
-- For dropdown/select fields, ONLY use values from the provided options list
-- For checkbox/radio fields, use appropriate yes/no or true/false values
-- Vary the data realistically — different names, cities, states, ages, etc.
-- Do NOT include a URL column
-- Do NOT wrap in markdown code blocks
-- Output ONLY the raw CSV text, nothing else"""
-
-        if instructions:
-            prompt += f"\n\nSPECIAL INSTRUCTIONS:\n{instructions}"
-
-        # Set up AI credentials for _call_ai_api
-        global _filler_ai_key, _filler_oai_key, _filler_ai_model
-        prev_key, prev_oai, prev_model = _filler_ai_key, _filler_oai_key, _filler_ai_model
-        _filler_ai_key = ai_key
-        _filler_oai_key = oai_key
-        _filler_ai_model = ai_model
-
-        try:
-            # Use higher max_tokens for large data generation
-            csv_text = _call_ai_api(prompt, max_tokens=16000)
-        finally:
-            _filler_ai_key, _filler_oai_key, _filler_ai_model = prev_key, prev_oai, prev_model
-
-        if not csv_text:
-            self._send_json(500, {"error": "AI returned empty response. Check your API key."})
-            return
-
-        # Clean up: strip markdown code fences if AI added them
-        csv_text = csv_text.strip()
-        if csv_text.startswith('```'):
-            lines = csv_text.split('\n')
-            lines = lines[1:]  # remove opening ```csv or ```
-            if lines and lines[-1].strip() == '```':
-                lines = lines[:-1]
-            csv_text = '\n'.join(lines)
-
-        self._send_json(200, {"ok": True, "csv": csv_text, "row_count": row_count})
 
     # ── Multi-Step Form Extraction ─────────────────────────────
 

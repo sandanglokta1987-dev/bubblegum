@@ -668,25 +668,47 @@ async function runGenerate() {
   status.textContent = 'Calling AI...';
   status.style.color = 'var(--amber)';
 
-  try {
-    const res = await fetch('/generate-data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fields, row_count: rowCount, instructions,
-        ai_key: $('aiKey').value.trim(),
-        oai_key: $('oaiKey').value.trim(),
-        ai_model: $('modelSelect').value
-      })
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) { status.textContent = data.error || 'Generation failed'; status.style.color = 'var(--red)'; return; }
+  // Build field description
+  const fieldLines = fields.map(f => {
+    let line = `- ${f.label || f.name || 'unknown'} (name: ${f.name || '?'}) type: ${f.type || 'text'}`;
+    if (f.required) line += ' [REQUIRED]';
+    if (f.options && f.options.length) line += ` options: ${f.options.slice(0, 30).join(', ')}`;
+    if (f.placeholder) line += ` placeholder: ${f.placeholder}`;
+    return line;
+  }).join('\n');
 
-    // Auto-download the CSV
+  const prompt = `Generate exactly ${rowCount} rows of realistic, randomly varied form submission data as a CSV.
+
+FORM FIELDS:
+${fieldLines}
+
+RULES:
+- First row must be CSV headers (use the field name/label as column header)
+- Generate data for an average US adult — realistic names, US phone formats, US addresses, real-sounding emails
+- For dropdown/select fields, ONLY use values from the provided options list
+- For checkbox/radio fields, use appropriate yes/no or true/false values
+- Vary the data realistically — different names, cities, states, ages, etc.
+- Do NOT include a URL column
+- Do NOT wrap in markdown code blocks
+- Output ONLY the raw CSV text, nothing else${instructions ? `\n\nSPECIAL INSTRUCTIONS:\n${instructions}` : ''}`;
+
+  try {
+    let csvText = await callAI(null, prompt, 16000);
+    csvText = csvText.trim();
+    // Strip markdown fences if AI added them
+    if (csvText.startsWith('```')) {
+      const lines = csvText.split('\n');
+      lines.shift();
+      if (lines.length && lines[lines.length - 1].trim() === '```') lines.pop();
+      csvText = lines.join('\n');
+    }
+    if (!csvText) { status.textContent = 'AI returned empty response'; status.style.color = 'var(--red)'; return; }
+
+    // Auto-download
     const host = extractHost($('feUrl').value.trim()) || 'site';
     const date = new Date().toISOString().split('T')[0];
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([data.csv], { type: 'text/csv' }));
+    a.href = URL.createObjectURL(new Blob([csvText], { type: 'text/csv' }));
     a.download = `data-${host}-${rowCount}rows-${date}.csv`;
     a.click();
 
