@@ -730,6 +730,326 @@ def _fill_current_row():
     }
 
 
+# ── Second Pass: Fill Empty Required Fields ──────────────────────────────────
+
+_SCAN_EMPTY_REQUIRED_JS = r"""
+(function() {
+    var results = [];
+    var seen = new Set();
+
+    function isVisible(el) {
+        return el.offsetParent !== null && getComputedStyle(el).display !== 'none'
+            && getComputedStyle(el).visibility !== 'hidden';
+    }
+
+    function getLabel(el) {
+        var label = '';
+        if (el.id) {
+            var lbl = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+            if (lbl) label = lbl.textContent.trim();
+        }
+        if (!label) {
+            var parent = el.closest('label, .gfield, .nf-field, .wpforms-field, .frm_form_field');
+            if (parent) {
+                var lbl = parent.querySelector('label, .gfield_label, .nf-label, .wpforms-field-label');
+                if (lbl) label = lbl.textContent.trim();
+            }
+        }
+        if (!label) label = el.getAttribute('aria-label') || el.placeholder || el.name || '';
+        return label.replace(/\s+/g, ' ').substring(0, 200);
+    }
+
+    function isRequired(el) {
+        if (el.required || el.getAttribute('aria-required') === 'true') return true;
+        var container = el.closest('.gfield, .nf-field, .wpforms-field, .frm_form_field, .field');
+        if (container) {
+            if (container.classList.contains('gfield_contains_required')) return true;
+            if (container.classList.contains('nf-field-required')) return true;
+            if (container.classList.contains('wpforms-field-required')) return true;
+            if (container.classList.contains('frm_required_field')) return true;
+            if (container.querySelector('.gfield_required, .required, .req')) return true;
+        }
+        var label = getLabel(el);
+        if (label.includes('*')) return true;
+        return false;
+    }
+
+    function getOptions(el) {
+        var name = el.name;
+        if (el.type === 'radio') {
+            var radios = document.querySelectorAll('input[name="' + CSS.escape(name) + '"]');
+            var opts = [];
+            radios.forEach(function(r) {
+                var rLabel = '';
+                if (r.id) {
+                    var lbl = document.querySelector('label[for="' + CSS.escape(r.id) + '"]');
+                    if (lbl) rLabel = lbl.textContent.trim();
+                }
+                if (!rLabel) rLabel = r.value;
+                opts.push(rLabel);
+            });
+            return opts;
+        }
+        if (el.tagName === 'SELECT') {
+            var opts = [];
+            for (var i = 0; i < el.options.length; i++) {
+                var t = el.options[i].text.trim();
+                if (t && el.options[i].value) opts.push(t);
+            }
+            return opts;
+        }
+        return [];
+    }
+
+    document.querySelectorAll('input, select, textarea').forEach(function(el) {
+        if (!isVisible(el)) return;
+        var type = (el.getAttribute('type') || el.tagName.toLowerCase()).toLowerCase();
+        if (['hidden', 'submit', 'button', 'file', 'image', 'reset'].includes(type)) return;
+        if (el.name && (el.name.includes('captcha') || el.name.includes('honeypot'))) return;
+        if (el.className && /g-recaptcha|h-captcha/i.test(el.className)) return;
+        if (!isRequired(el)) return;
+
+        var isEmpty = false;
+        if (type === 'radio') {
+            var name = el.name;
+            if (seen.has('radio:' + name)) return;
+            seen.add('radio:' + name);
+            var checked = document.querySelector('input[name="' + CSS.escape(name) + '"]:checked');
+            isEmpty = !checked;
+        } else if (type === 'checkbox') {
+            isEmpty = !el.checked;
+        } else if (el.tagName === 'SELECT') {
+            isEmpty = el.selectedIndex <= 0 || !el.value;
+        } else {
+            isEmpty = !el.value.trim();
+        }
+
+        if (!isEmpty) return;
+
+        results.push({
+            id: el.id || '',
+            name: el.name || '',
+            tag: el.tagName.toLowerCase(),
+            type: type,
+            label: getLabel(el),
+            placeholder: el.placeholder || '',
+            options: getOptions(el)
+        });
+    });
+
+    return results;
+})()
+"""
+
+
+def _fill_empty_required(driver):
+    """Find all empty required fields on the page and fill them using AI.
+    Returns {found, filled, errors} or None if nothing to do."""
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import Select
+
+    try:
+        empty_fields = driver.execute_script(_SCAN_EMPTY_REQUIRED_JS)
+    except Exception as e:
+        print(f"[second-pass] JS scan failed: {e}", flush=True)
+        return None
+
+    if not empty_fields:
+        print("[second-pass] No empty required fields found.", flush=True)
+        return None
+
+    print(f"[second-pass] Found {len(empty_fields)} empty required field(s).", flush=True)
+
+    # Build prompt for AI
+    lines = []
+    for i, f in enumerate(empty_fields, 1):
+        desc = f'"{f["label"] or f["name"] or f["id"]}" ({f["type"]})'
+        if f.get("placeholder"):
+            desc += f' — placeholder: "{f["placeholder"]}"'
+        if f.get("options"):
+            desc += f' — options: {" | ".join(f["options"])}'
+        else:
+            desc += ' — required'
+        lines.append(f"{i}. {desc}")
+
+    prompt = (
+        "Here are empty required fields on a web form that need to be filled.\n"
+        "Generate realistic data for an average US adult.\n"
+        "For text areas that need descriptions or paragraphs, write 2-3 sentences.\n"
+        "For emails, use a realistic format. For phone numbers, use US format.\n\n"
+        "FIELDS:\n" + "\n".join(lines) + "\n\n"
+        "Return ONLY a JSON object mapping field numbers (as strings) to values.\n"
+        'Example: {"1": "John", "2": "Option A", "3": "A short paragraph..."}\n'
+        "No markdown fences, no explanation — just the JSON object."
+    )
+
+    raw = _call_ai_api(prompt, max_tokens=2048)
+    if not raw:
+        print("[second-pass] AI returned empty response.", flush=True)
+        return {"found": len(empty_fields), "filled": 0, "errors": ["AI returned empty response"]}
+
+    # Parse JSON — strip markdown fences if present
+    cleaned = re.sub(r'^```(?:json)?\s*', '', raw.strip())
+    cleaned = re.sub(r'\s*```$', '', cleaned)
+    try:
+        values = json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        print(f"[second-pass] JSON parse failed: {e}\nRaw: {raw[:500]}", flush=True)
+        return {"found": len(empty_fields), "filled": 0, "errors": [f"JSON parse failed: {e}"]}
+
+    filled_count = 0
+    fill_errors = []
+
+    for i, field in enumerate(empty_fields, 1):
+        val = values.get(str(i))
+        if val is None:
+            continue
+        val = str(val).strip()
+        if not val:
+            continue
+
+        ftype = field["type"]
+        fid = field["id"]
+        fname = field["name"]
+
+        try:
+            # Locate the element
+            el = None
+            if fid:
+                els = driver.find_elements(By.ID, fid)
+                if els:
+                    el = els[0]
+            if not el and fname:
+                els = driver.find_elements(By.NAME, fname)
+                if els:
+                    # For radio, find all with same name
+                    if ftype == 'radio':
+                        el = els[0]  # we'll handle the group below
+                    else:
+                        el = els[0]
+            if not el:
+                fill_errors.append(f"Could not locate field #{i} ({field.get('label', '')})")
+                continue
+
+            # Scroll into view
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+            time.sleep(0.1)
+
+            if ftype == 'radio':
+                # Find all radios in the group and match by label/value
+                group_name = el.get_attribute('name')
+                all_radios = driver.find_elements(By.NAME, group_name) if group_name else [el]
+                clicked = False
+                val_lower = val.lower()
+
+                for r in all_radios:
+                    # Check value attribute
+                    r_val = (r.get_attribute('value') or '').strip()
+                    if r_val.lower() == val_lower:
+                        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", r)
+                        try:
+                            r.click()
+                        except Exception:
+                            driver.execute_script("arguments[0].click();", r)
+                        clicked = True
+                        break
+
+                if not clicked:
+                    # Match by label text
+                    for r in all_radios:
+                        r_id = r.get_attribute('id') or ''
+                        label_text = ''
+                        if r_id:
+                            try:
+                                lbl = driver.find_element(By.CSS_SELECTOR, f'label[for="{r_id}"]')
+                                label_text = lbl.text.strip()
+                            except Exception:
+                                pass
+                        if not label_text:
+                            try:
+                                parent = r.find_element(By.XPATH, '..')
+                                label_text = parent.text.strip()
+                            except Exception:
+                                pass
+                        if label_text and val_lower in label_text.lower():
+                            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", r)
+                            try:
+                                r.click()
+                            except Exception:
+                                driver.execute_script("arguments[0].click();", r)
+                            clicked = True
+                            break
+
+                if clicked:
+                    filled_count += 1
+                else:
+                    fill_errors.append(f"No radio match for #{i}: '{val[:50]}'")
+
+            elif ftype == 'checkbox':
+                if not el.is_selected():
+                    try:
+                        el.click()
+                    except Exception:
+                        driver.execute_script("arguments[0].click();", el)
+                filled_count += 1
+
+            elif field["tag"] == 'select':
+                sel = Select(el)
+                selected = False
+                try:
+                    sel.select_by_visible_text(val)
+                    selected = True
+                except Exception:
+                    pass
+                if not selected:
+                    try:
+                        sel.select_by_value(val)
+                        selected = True
+                    except Exception:
+                        pass
+                if not selected:
+                    # Partial match
+                    val_lower = val.lower()
+                    for opt in sel.options:
+                        if val_lower in opt.text.strip().lower():
+                            sel.select_by_visible_text(opt.text.strip())
+                            selected = True
+                            break
+                if selected:
+                    filled_count += 1
+                else:
+                    fill_errors.append(f"No select match for #{i}: '{val[:50]}'")
+
+            else:
+                # text, email, tel, url, number, textarea, date
+                if ftype in ('date', 'datetime-local', 'month', 'week', 'time'):
+                    driver.execute_script(
+                        "arguments[0].value = arguments[1];"
+                        "arguments[0].dispatchEvent(new Event('input', {bubbles:true}));"
+                        "arguments[0].dispatchEvent(new Event('change', {bubbles:true}));",
+                        el, val
+                    )
+                else:
+                    try:
+                        el.clear()
+                        el.send_keys(val)
+                    except Exception:
+                        driver.execute_script(
+                            "arguments[0].value = arguments[1];"
+                            "arguments[0].dispatchEvent(new Event('input', {bubbles:true}));"
+                            "arguments[0].dispatchEvent(new Event('change', {bubbles:true}));",
+                            el, val
+                        )
+                filled_count += 1
+
+        except Exception as e:
+            fill_errors.append(f"Error filling #{i}: {str(e)[:100]}")
+
+    result = {"found": len(empty_fields), "filled": filled_count, "errors": fill_errors}
+    print(f"[second-pass] Done: {filled_count}/{len(empty_fields)} filled. Errors: {fill_errors}", flush=True)
+    return result
+
+
 # ── HTTP Server ──────────────────────────────────────────────────────────────
 
 def get_serve_dir():
@@ -1097,6 +1417,15 @@ class QuietHandler(SimpleHTTPRequestHandler):
         with _filler_lock:
             result = _fill_current_row()
 
+        # Second pass: fill any empty required fields the CSV missed
+        with _filler_lock:
+            try:
+                sp = _fill_empty_required(_filler_driver)
+                if sp:
+                    result['second_pass'] = sp
+            except Exception as e:
+                print(f"[second-pass] Error: {e}", flush=True)
+
         result['columns'] = headers
         result['total'] = len(rows)
         result['url_column'] = url_col
@@ -1106,6 +1435,13 @@ class QuietHandler(SimpleHTTPRequestHandler):
         """Re-fill the current row (e.g., after page reload)."""
         with _filler_lock:
             result = _fill_current_row()
+        with _filler_lock:
+            try:
+                sp = _fill_empty_required(_filler_driver)
+                if sp:
+                    result['second_pass'] = sp
+            except Exception as e:
+                print(f"[second-pass] Error: {e}", flush=True)
         self._send_json(200, result)
 
     def _handle_filler_next(self):
@@ -1157,6 +1493,13 @@ class QuietHandler(SimpleHTTPRequestHandler):
                 return
 
             result = _fill_current_row()
+
+            try:
+                sp = _fill_empty_required(_filler_driver)
+                if sp:
+                    result['second_pass'] = sp
+            except Exception as e:
+                print(f"[second-pass] Error: {e}", flush=True)
 
         result['url_changed'] = url_changed
         self._send_json(200, result)
