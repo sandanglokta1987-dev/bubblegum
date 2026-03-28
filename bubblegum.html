@@ -744,6 +744,7 @@ RULES:
 - First column must be "page_url" with "${pageUrl}" on every row
 - Use the Field Name column values as your CSV column headers (these are the HTML field names the form filler maps to)
 - If a Field Name appears more than once (duplicate), make headers unique by appending _1, _2 etc.
+- CRITICAL: Every field marked Required=yes MUST have a non-empty value in EVERY row. Never leave a required field blank.
 - Skip hidden fields, captcha fields, honeypot fields, nonce fields, and search fields entirely
 - For select/dropdown fields, ONLY use exact values from the Options column
 - For radio fields, use the exact option text
