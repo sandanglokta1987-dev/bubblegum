@@ -201,7 +201,9 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
 @keyframes lsBarFill{0%{width:0;}100%{width:100%;}}
 @keyframes lsFadeIn{0%{opacity:0;}100%{opacity:1;}}
 
-.ls-status{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-top:14px;opacity:0;animation:lsFadeIn .4s 2s ease-out forwards;min-height:18px;}
+.ls-status{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-top:14px;opacity:0;animation:lsFadeIn .4s 2s ease-out forwards;min-height:18px;text-align:center;}
+.ls-log{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--hint);margin-top:10px;opacity:0;animation:lsFadeIn .4s 2.5s ease-out forwards;text-align:center;min-height:16px;transition:color .3s;}
+.ls-log.done{color:var(--green);}
 .ls-version{position:absolute;bottom:20px;right:24px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--hint);opacity:0;animation:lsFadeIn .4s 1s ease-out forwards;}
 .ls-powered{position:absolute;bottom:20px;left:24px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--hint);opacity:0;animation:lsFadeIn .4s 1s ease-out forwards;}
 
@@ -219,6 +221,7 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
   <div class="ls-tagline">Intelligent Form Automation</div>
   <div class="ls-bar-wrap"><div class="ls-bar-fill"></div></div>
   <div class="ls-status" id="lsStatus">Starting...</div>
+  <div class="ls-log" id="lsLog"></div>
   <div class="ls-powered">powered by Selenium + AI</div>
   <div class="ls-version">v4.1</div>
   <div class="ls-particle" style="left:15%;bottom:10%;animation-delay:0s;"></div>
@@ -1152,24 +1155,66 @@ function switchFeMode(mode) {
 // ─── INIT ──────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Loading screen — fetch status and transition to app
+  // Loading screen — show update log sequence, then transition
   (async function() {
     const ls = $('loadingScreen');
     const lsStatus = $('lsStatus');
-    if (ls) {
-      try {
-        const res = await fetch('/api/status');
-        const data = await res.json();
-        if (data.update?.updated) lsStatus.textContent = `Updated to ${data.update.sha} \u2714`;
-        else if (data.update?.offline) lsStatus.textContent = 'Offline mode';
-        else lsStatus.textContent = 'Up to date \u2714';
-      } catch { lsStatus.textContent = 'Ready'; }
-      setTimeout(() => {
-        ls.classList.add('fade-out');
-        document.querySelector('.wrap').style.display = '';
-        setTimeout(() => ls.remove(), 600);
-      }, 3800);
+    const lsLog = $('lsLog');
+    if (!ls) return;
+
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    let statusData = {};
+
+    // Fetch status
+    try {
+      const res = await fetch('/api/status');
+      statusData = await res.json();
+    } catch {}
+
+    // Phase 1: Update info
+    await sleep(2200);
+    lsStatus.textContent = 'Checking for updates...';
+
+    await sleep(800);
+    const files = statusData.files || ['bubblegum_app.py', 'bubblegum.html'];
+    for (const f of files) {
+      lsLog.textContent = f;
+      await sleep(500);
     }
+
+    if (statusData.update?.updated) {
+      lsStatus.textContent = `Updated to ${statusData.update.sha} \u2714`;
+      lsLog.textContent = `${statusData.update.files || 2} files downloaded`;
+      lsLog.classList.add('done');
+    } else if (statusData.update?.offline) {
+      lsStatus.textContent = 'Offline mode';
+      lsLog.textContent = 'using cached files';
+    } else {
+      lsStatus.textContent = 'Up to date \u2714';
+      lsLog.classList.add('done');
+    }
+
+    // Phase 2: Loading modules
+    await sleep(1000);
+    lsLog.classList.remove('done');
+    lsStatus.textContent = 'Loading modules...';
+    const modules = statusData.modules || ['selenium', 'form-extractor', 'form-filler', 'ai-engine'];
+    for (const m of modules) {
+      lsLog.textContent = m;
+      await sleep(400);
+    }
+
+    // Phase 3: Ready
+    lsStatus.textContent = 'Ready \u2714';
+    lsLog.textContent = `v${statusData.version || '4.1'}`;
+    lsLog.classList.add('done');
+
+    await sleep(1200);
+
+    // Fade out
+    ls.classList.add('fade-out');
+    document.querySelector('.wrap').style.display = '';
+    setTimeout(() => ls.remove(), 600);
   })();
 
   $('aiKey').value = localStorage.getItem('bg_aiKey') || '';
