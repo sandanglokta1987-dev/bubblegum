@@ -187,7 +187,7 @@ def _update_files():
 
         if remote_sha == local_sha:
             print("[updater] Up to date.", flush=True)
-            return
+            return {"updated": False, "sha": remote_sha[:8]}
 
         print(f"[updater] Update available: {remote_sha[:8]}", flush=True)
         APP_DIR.mkdir(parents=True, exist_ok=True)
@@ -201,9 +201,11 @@ def _update_files():
 
         sha_file.write_text(remote_sha)
         print(f"[updater] Done: {remote_sha[:8]}", flush=True)
+        return {"updated": True, "sha": remote_sha[:8], "files": len(UPDATE_FILES)}
 
     except Exception as e:
         print(f"[updater] Failed (offline?): {e}", flush=True)
+        return {"updated": False, "offline": True}
 
 
 # ── Load + Run ───────────────────────────────────────────────────────────────
@@ -218,133 +220,25 @@ def _get_logic_path():
     return Path(os.path.dirname(os.path.abspath(__file__))) / "bubblegum_app.py"
 
 
-def _show_splash_and_launch():
-    """Show a branded splash window during startup, then open browser."""
-    import tkinter as tk
-    import threading
+_update_info = {"updated": False}  # Shared with bubblegum_app.py via globals()
 
-    BG = "#1a0a1e"
-    SURFACE = "#2a1230"
-    PINK = "#ff69b4"
-    MUTED = "#a070a0"
-    DIM = "#4a2250"
 
-    W, H = 420, 200
-    root = tk.Tk()
-    root.title("BubbleGum")
-    root.geometry(f"{W}x{H}")
-    root.resizable(False, False)
-    root.overrideredirect(True)
-    root.attributes('-topmost', True)
-    root.configure(bg=BG)
+def _launch():
+    """Update, start server, open browser. No tkinter — loading screen is in HTML."""
+    global _update_info
 
-    # Center on screen
-    root.update_idletasks()
-    x = (root.winfo_screenwidth() // 2) - (W // 2)
-    y = (root.winfo_screenheight() // 2) - (H // 2)
-    root.geometry(f"{W}x{H}+{x}+{y}")
+    _update_info = _update_files() or {"updated": False, "offline": True}
 
-    try:
-        if getattr(sys, "frozen", False):
-            icon_path = os.path.join(sys._MEIPASS, "bubblegum.ico")
-        else:
-            icon_path = os.path.join(os.path.dirname(__file__), "bubblegum.ico")
-        if os.path.exists(icon_path):
-            root.iconbitmap(icon_path)
-    except Exception:
-        pass
+    logic_path = _get_logic_path()
+    code = logic_path.read_text(encoding='utf-8')
+    exec(compile(code, str(logic_path), 'exec'), globals())
 
-    # Logo row: pink circle + title
-    top = tk.Frame(root, bg=BG)
-    top.pack(pady=(32, 0))
+    server = start_server()  # noqa: F821
 
-    bubble = tk.Canvas(top, width=44, height=44, bg=BG, highlightthickness=0)
-    bubble.pack(side="left", padx=(0, 12))
-    bubble.create_oval(4, 4, 40, 40, fill=PINK, outline="#ff8cc8", width=2)
-    bubble.create_text(22, 22, text="\U0001F9CB", font=("Segoe UI", 14))
+    url = f"http://127.0.0.1:{PORT}/bubblegum.html"
+    webbrowser.open(url)
 
-    tk.Label(top, text="BubbleGum", font=("Segoe UI", 28, "bold"),
-             fg=PINK, bg=BG).pack(side="left")
-
-    # Tagline
-    tk.Label(root, text="Intelligent Form Automation",
-             font=("Segoe UI", 10), fg=MUTED, bg=BG).pack(pady=(4, 0))
-
-    # Status text
-    status_var = tk.StringVar(value="Starting...")
-    tk.Label(root, textvariable=status_var,
-             font=("Segoe UI", 10), fg="#d4a0d0", bg=BG).pack(pady=(18, 0))
-
-    # Progress bar (canvas for precise control)
-    bar_w, bar_h = W - 120, 5
-    bar_canvas = tk.Canvas(root, width=bar_w, height=bar_h,
-                           bg=SURFACE, highlightthickness=0, bd=0)
-    bar_canvas.pack(pady=(10, 0))
-    bar_fill = bar_canvas.create_rectangle(0, 0, 0, bar_h, fill=PINK, outline="")
-
-    # Footer
-    foot = tk.Frame(root, bg=BG)
-    foot.pack(side="bottom", fill="x", pady=(0, 8), padx=20)
-    tk.Label(foot, text="powered by Selenium + AI",
-             font=("Segoe UI", 8), fg=DIM, bg=BG).pack(side="left")
-    tk.Label(foot, text="v4.0",
-             font=("Segoe UI", 8), fg=DIM, bg=BG).pack(side="right")
-
-    # Thread-safe UI update via root.after()
-    def set_status(msg, pct=0):
-        def _update():
-            try:
-                status_var.set(msg)
-                fill_px = int((bar_w * pct) / 100)
-                bar_canvas.coords(bar_fill, 0, 0, fill_px, bar_h)
-            except Exception:
-                pass
-        try:
-            root.after(0, _update)
-        except Exception:
-            pass
-
-    def startup_thread():
-        try:
-            set_status("Checking for updates...", 10)
-            _update_files()
-
-            set_status("Loading...", 50)
-            logic_path = _get_logic_path()
-            code = logic_path.read_text(encoding='utf-8')
-            exec(compile(code, str(logic_path), 'exec'), globals())
-
-            set_status("Starting server...", 75)
-            server = start_server()  # noqa: F821
-
-            # Close splash BEFORE opening browser — no overlap
-            try:
-                root.after(0, root.destroy)
-            except Exception:
-                pass
-            time.sleep(0.3)
-
-            url = f"http://127.0.0.1:{PORT}/bubblegum.html"
-            webbrowser.open(url)
-
-            # Keep server alive
-            server.serve_forever()
-
-        except Exception as e:
-            set_status(f"Error: {e}", 0)
-            time.sleep(5)
-            try:
-                root.after(0, root.destroy)
-            except Exception:
-                pass
-            os._exit(1)
-
-    t = threading.Thread(target=startup_thread, daemon=True)
-    t.start()
-    root.mainloop()
-
-    # Keep running until server thread dies
-    t.join()
+    server.serve_forever()
 
 
 def main():
@@ -352,7 +246,7 @@ def main():
         if not show_activation_dialog():
             sys.exit(0)
 
-    _show_splash_and_launch()
+    _launch()
 
 
 if __name__ == "__main__":

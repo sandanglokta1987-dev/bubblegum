@@ -172,10 +172,65 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
   .tier-switcher{width:100%;}
   .tier-btn{flex:1;text-align:center;}
 }
+
+/* ─── LOADING SCREEN ────────────────────────────────── */
+#loadingScreen{position:fixed;top:0;left:0;width:100vw;height:100vh;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;transition:opacity .6s ease;}
+#loadingScreen.fade-out{opacity:0;pointer-events:none;}
+#loadingScreen::before{content:'';position:absolute;top:-100px;right:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(255,105,180,0.12) 0%,transparent 60%);animation:lsGlow 3s ease-in-out infinite alternate;}
+#loadingScreen::after{content:'';position:absolute;bottom:-100px;left:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(96,165,250,0.08) 0%,transparent 60%);animation:lsGlow 4s ease-in-out infinite alternate-reverse;}
+@keyframes lsGlow{0%{transform:scale(1);}100%{transform:scale(1.3);}}
+
+.ls-bubble{width:90px;height:90px;background:linear-gradient(135deg,#ff69b4,#ff8cc8,#ff69b4);border-radius:50% 50% 50% 20%;display:flex;align-items:center;justify-content:center;font-size:42px;box-shadow:0 0 60px rgba(255,105,180,0.4),0 0 120px rgba(255,105,180,0.15);animation:bubble3d 2.5s ease-out forwards, bubbleFloat 3s 2.5s ease-in-out infinite;}
+@keyframes bubble3d{
+  0%{transform:perspective(800px) rotateY(0deg) scale(0.3);opacity:0;}
+  40%{transform:perspective(800px) rotateY(180deg) scale(1.15);opacity:1;}
+  70%{transform:perspective(800px) rotateY(340deg) scale(0.95);}
+  100%{transform:perspective(800px) rotateY(360deg) scale(1);}
+}
+@keyframes bubbleFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+
+.ls-ring{position:absolute;width:130px;height:130px;border:2px solid rgba(255,105,180,0.15);border-radius:50%;animation:lsRing 2s ease-out forwards;}
+@keyframes lsRing{0%{transform:scale(0.5);opacity:0;}50%{opacity:1;}100%{transform:scale(1.8);opacity:0;}}
+
+.ls-title{font-family:'Fredoka',sans-serif;font-size:44px;font-weight:700;letter-spacing:-0.5px;background:linear-gradient(135deg,#fff 30%,#ff8cc8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-top:24px;opacity:0;animation:lsSlideUp .6s .8s ease-out forwards;}
+.ls-tagline{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--hint);margin-top:8px;opacity:0;animation:lsSlideUp .6s 1.2s ease-out forwards;}
+@keyframes lsSlideUp{0%{transform:translateY(16px);opacity:0;}100%{transform:translateY(0);opacity:1;}}
+
+.ls-bar-wrap{width:220px;height:3px;background:var(--surface2);border-radius:2px;margin-top:32px;overflow:hidden;opacity:0;animation:lsFadeIn .4s 1.5s ease-out forwards;}
+.ls-bar-fill{height:100%;width:0;background:linear-gradient(90deg,var(--pink),var(--pink2));border-radius:2px;animation:lsBarFill 2.5s 1.5s ease-out forwards;box-shadow:0 0 10px rgba(255,105,180,0.5);}
+@keyframes lsBarFill{0%{width:0;}100%{width:100%;}}
+@keyframes lsFadeIn{0%{opacity:0;}100%{opacity:1;}}
+
+.ls-status{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-top:14px;opacity:0;animation:lsFadeIn .4s 2s ease-out forwards;min-height:18px;}
+.ls-version{position:absolute;bottom:20px;right:24px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--hint);opacity:0;animation:lsFadeIn .4s 1s ease-out forwards;}
+.ls-powered{position:absolute;bottom:20px;left:24px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--hint);opacity:0;animation:lsFadeIn .4s 1s ease-out forwards;}
+
+.ls-particle{position:absolute;width:4px;height:4px;background:var(--pink);border-radius:50%;opacity:0;animation:lsParticle 4s ease-out infinite;}
+@keyframes lsParticle{0%{opacity:0;transform:translateY(0);}20%{opacity:0.6;}100%{opacity:0;transform:translateY(-200px);}}
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<!-- Loading Screen -->
+<div id="loadingScreen">
+  <div class="ls-ring"></div>
+  <div class="ls-bubble">&#x1F9CB;</div>
+  <div class="ls-title">BubbleGum</div>
+  <div class="ls-tagline">Intelligent Form Automation</div>
+  <div class="ls-bar-wrap"><div class="ls-bar-fill"></div></div>
+  <div class="ls-status" id="lsStatus">Starting...</div>
+  <div class="ls-powered">powered by Selenium + AI</div>
+  <div class="ls-version">v4.1</div>
+  <div class="ls-particle" style="left:15%;bottom:10%;animation-delay:0s;"></div>
+  <div class="ls-particle" style="left:35%;bottom:5%;animation-delay:0.7s;"></div>
+  <div class="ls-particle" style="left:55%;bottom:15%;animation-delay:1.4s;"></div>
+  <div class="ls-particle" style="left:75%;bottom:8%;animation-delay:2.1s;"></div>
+  <div class="ls-particle" style="left:90%;bottom:12%;animation-delay:0.3s;"></div>
+  <div class="ls-particle" style="left:25%;bottom:20%;animation-delay:1.8s;"></div>
+  <div class="ls-particle" style="left:65%;bottom:3%;animation-delay:2.5s;"></div>
+</div>
+
+<div class="wrap" style="display:none">
 
   <div class="header">
     <div class="logo">
@@ -1097,6 +1152,26 @@ function switchFeMode(mode) {
 // ─── INIT ──────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Loading screen — fetch status and transition to app
+  (async function() {
+    const ls = $('loadingScreen');
+    const lsStatus = $('lsStatus');
+    if (ls) {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        if (data.update?.updated) lsStatus.textContent = `Updated to ${data.update.sha} \u2714`;
+        else if (data.update?.offline) lsStatus.textContent = 'Offline mode';
+        else lsStatus.textContent = 'Up to date \u2714';
+      } catch { lsStatus.textContent = 'Ready'; }
+      setTimeout(() => {
+        ls.classList.add('fade-out');
+        document.querySelector('.wrap').style.display = '';
+        setTimeout(() => ls.remove(), 600);
+      }, 3800);
+    }
+  })();
+
   $('aiKey').value = localStorage.getItem('bg_aiKey') || '';
   $('oaiKey').value = localStorage.getItem('bg_oaiKey') || '';
   const sm = localStorage.getItem('bg_model'); if (sm) $('modelSelect').value = sm;

@@ -661,6 +661,9 @@ class QuietHandler(SimpleHTTPRequestHandler):
         elif parsed.path == '/quit':
             self._send_json(200, {"ok": True})
             threading.Thread(target=lambda: (time.sleep(2), os._exit(0)), daemon=True).start()
+        elif parsed.path == '/api/status':
+            update_info = globals().get('_update_info', {})
+            self._send_json(200, {"ready": True, "update": update_info, "version": "4.1"})
         else:
             super().do_GET()
 
