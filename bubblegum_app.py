@@ -519,11 +519,14 @@ def _fill_current_row():
                     try:
                         sel.select_by_visible_text(value)
                     except Exception:
-                        # Try partial match
+                        # Try partial match + stripped comparison
                         matched = False
+                        val_clean = re.sub(r'[,\s\$]', '', value.lower())
                         for opt in sel.options:
-                            if value.lower() in opt.text.lower():
-                                sel.select_by_visible_text(opt.text)
+                            opt_text = opt.text.strip()
+                            opt_clean = re.sub(r'[,\s\$]', '', opt_text.lower())
+                            if value.lower() in opt_text.lower() or val_clean == opt_clean:
+                                sel.select_by_visible_text(opt_text)
                                 matched = True
                                 break
                         if not matched:
@@ -531,7 +534,71 @@ def _fill_current_row():
                             continue
                 filled.append(col_name)
 
-            elif input_type in ('checkbox', 'radio'):
+            elif input_type == 'radio':
+                # Radio GROUP: find the right option by value, label, or partial text match
+                field_name = el.get_attribute('name') or col_name
+                all_radios = driver.find_elements(By.NAME, field_name)
+                clicked = False
+
+                # Simple boolean (yes/true/1) — click first if truthy
+                if value.lower() in ('1', 'true', 'yes', 'y', 'checked', 'on'):
+                    if not el.is_selected():
+                        el.click()
+                    clicked = True
+                elif value.lower() in ('0', 'false', 'no', 'n', 'unchecked', 'off'):
+                    # For "no" — try to find and click the "No" radio option
+                    for r in all_radios:
+                        r_val = (r.get_attribute('value') or '').strip()
+                        if r_val.lower() == 'no':
+                            r.click()
+                            clicked = True
+                            break
+                else:
+                    # Match by value attribute
+                    for r in all_radios:
+                        r_val = (r.get_attribute('value') or '').strip()
+                        if r_val.lower() == value.lower():
+                            r.click()
+                            clicked = True
+                            break
+
+                    # Match by associated label text
+                    if not clicked:
+                        for r in all_radios:
+                            r_id = r.get_attribute('id') or ''
+                            label_text = ''
+                            if r_id:
+                                try:
+                                    lbl = driver.find_element(By.CSS_SELECTOR, f'label[for="{r_id}"]')
+                                    label_text = lbl.text.strip()
+                                except Exception:
+                                    pass
+                            if not label_text:
+                                try:
+                                    parent = r.find_element(By.XPATH, '..')
+                                    label_text = parent.text.strip()
+                                except Exception:
+                                    pass
+                            if label_text and value.lower()[:40] in label_text.lower()[:80]:
+                                r.click()
+                                clicked = True
+                                break
+
+                    # Partial match on value attribute
+                    if not clicked:
+                        for r in all_radios:
+                            r_val = (r.get_attribute('value') or '').strip()
+                            if r_val and value.lower()[:30] in r_val.lower():
+                                r.click()
+                                clicked = True
+                                break
+
+                if clicked:
+                    filled.append(col_name)
+                else:
+                    errors.append(f"No radio option matching '{value[:50]}' for {col_name}")
+
+            elif input_type == 'checkbox':
                 should_check = value.lower() in ('1', 'true', 'yes', 'y', 'checked', 'on')
                 is_checked = el.is_selected()
                 if should_check != is_checked:
