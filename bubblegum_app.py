@@ -510,6 +510,13 @@ def _fill_current_row():
         tag = el.tag_name.lower()
         input_type = (el.get_attribute('type') or '').lower()
 
+        # Scroll element into view before interacting
+        try:
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+            time.sleep(0.1)
+        except Exception:
+            pass
+
         try:
             if tag == 'select':
                 sel = Select(el)
@@ -540,29 +547,35 @@ def _fill_current_row():
                 all_radios = driver.find_elements(By.NAME, field_name)
                 clicked = False
 
+                def click_radio(r):
+                    try:
+                        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", r)
+                        time.sleep(0.1)
+                        r.click()
+                    except Exception:
+                        driver.execute_script("arguments[0].click();", r)
+                    return True
+
                 # Simple boolean (yes/true/1) — click first if truthy
                 if value.lower() in ('1', 'true', 'yes', 'y', 'checked', 'on'):
                     if not el.is_selected():
-                        el.click()
+                        click_radio(el)
                     clicked = True
                 elif value.lower() in ('0', 'false', 'no', 'n', 'unchecked', 'off'):
-                    # For "no" — try to find and click the "No" radio option
                     for r in all_radios:
                         r_val = (r.get_attribute('value') or '').strip()
                         if r_val.lower() == 'no':
-                            r.click()
-                            clicked = True
+                            clicked = click_radio(r)
                             break
                 else:
-                    # Match by value attribute
+                    # Match by value attribute (exact)
                     for r in all_radios:
                         r_val = (r.get_attribute('value') or '').strip()
                         if r_val.lower() == value.lower():
-                            r.click()
-                            clicked = True
+                            clicked = click_radio(r)
                             break
 
-                    # Match by associated label text
+                    # Match by associated label text (partial — first 40 chars)
                     if not clicked:
                         for r in all_radios:
                             r_id = r.get_attribute('id') or ''
@@ -579,9 +592,8 @@ def _fill_current_row():
                                     label_text = parent.text.strip()
                                 except Exception:
                                     pass
-                            if label_text and value.lower()[:40] in label_text.lower()[:80]:
-                                r.click()
-                                clicked = True
+                            if label_text and value.lower()[:40] in label_text.lower():
+                                clicked = click_radio(r)
                                 break
 
                     # Partial match on value attribute
@@ -589,8 +601,24 @@ def _fill_current_row():
                         for r in all_radios:
                             r_val = (r.get_attribute('value') or '').strip()
                             if r_val and value.lower()[:30] in r_val.lower():
-                                r.click()
-                                clicked = True
+                                clicked = click_radio(r)
+                                break
+
+                    # Last resort: match value anywhere in label text
+                    if not clicked:
+                        for r in all_radios:
+                            r_id = r.get_attribute('id') or ''
+                            label_text = ''
+                            if r_id:
+                                try:
+                                    lbl = driver.find_element(By.CSS_SELECTOR, f'label[for="{r_id}"]')
+                                    label_text = lbl.text.strip()
+                                except Exception:
+                                    pass
+                            r_val = (r.get_attribute('value') or '').strip()
+                            combined = (label_text + ' ' + r_val).lower()
+                            if value.lower()[:20] in combined:
+                                clicked = click_radio(r)
                                 break
 
                 if clicked:
