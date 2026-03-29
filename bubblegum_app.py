@@ -1049,6 +1049,61 @@ def _fill_all_empty(driver):
     return result
 
 
+# ── PDF URL Detector ─────────────────────────────────────────────────────────
+
+def _detect_pdf_url(page_url, row):
+    """Check if a PDF was uploaded and try to find its live URL on the server."""
+    # Find PDF filenames in the CSV row values
+    pdf_files = []
+    for col, val in row.items():
+        v = str(val).strip()
+        if v.lower().endswith('.pdf') and (os.sep in v or '/' in v):
+            # Extract just the filename
+            pdf_files.append(os.path.basename(v))
+
+    if not pdf_files:
+        return None
+
+    # Parse the domain from the page URL
+    parsed = urllib.parse.urlparse(page_url)
+    base = f"{parsed.scheme}://{parsed.netloc}"
+    now = time.strftime('%Y/%m')
+
+    # Common WordPress upload paths to try
+    path_patterns = [
+        f"/wp-content/uploads/{now}/{{f}}",
+        f"/wp-content/uploads/event-manager-uploads/event_banner/{now}/{{f}}",
+        f"/wp-content/uploads/wpforms/{{f}}",
+        f"/wp-content/uploads/formidable/{{f}}",
+        f"/wp-content/uploads/gravity_forms/{{f}}",
+        f"/wp-content/uploads/ninja-forms/{{f}}",
+        f"/wp-content/uploads/wpcf7_uploads/{{f}}",
+        f"/wp-content/uploads/{{f}}",
+    ]
+
+    results = {"verified": [], "candidates": []}
+
+    for fname in pdf_files:
+        for pattern in path_patterns:
+            url = base + pattern.format(f=urllib.parse.quote(fname))
+            try:
+                req = urllib.request.Request(url, method='HEAD')
+                req.add_header('User-Agent', 'Mozilla/5.0')
+                resp = urllib.request.urlopen(req, timeout=5)
+                if resp.status == 200:
+                    results["verified"].append(url)
+                    print(f"[pdf-detect] FOUND: {url}", flush=True)
+                    break  # Found it, skip other patterns for this file
+            except Exception:
+                results["candidates"].append(url)
+
+    if results["verified"]:
+        return results
+    # If nothing verified, return top 3 most likely candidates
+    results["candidates"] = results["candidates"][:3]
+    return results if results["candidates"] else None
+
+
 # ── HTTP Server ──────────────────────────────────────────────────────────────
 
 def get_serve_dir():
@@ -1435,6 +1490,14 @@ class QuietHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f"[second-pass] Error: {e}", flush=True)
 
+        # Check for uploaded PDF URLs
+        try:
+            pdf = _detect_pdf_url(first_url, rows[0])
+            if pdf:
+                result['pdf_url'] = pdf
+        except Exception:
+            pass
+
         result['columns'] = headers
         result['total'] = len(rows)
         result['url_column'] = url_col
@@ -1518,6 +1581,15 @@ class QuietHandler(SimpleHTTPRequestHandler):
                     result['second_pass'] = sp
             except Exception as e:
                 print(f"[second-pass] Error: {e}", flush=True)
+
+        # Check for uploaded PDF URLs
+        next_row = _filler_data[_filler_index]
+        try:
+            pdf = _detect_pdf_url(next_url, next_row)
+            if pdf:
+                result['pdf_url'] = pdf
+        except Exception:
+            pass
 
         result['url_changed'] = url_changed
         self._send_json(200, result)

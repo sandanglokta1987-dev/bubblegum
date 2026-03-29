@@ -1048,6 +1048,28 @@ async function ffFillStep(pos) {
     } else {
       ffLog('All fields filled \u2714', 'ok');
     }
+    if (data.pdf_url) {
+      const p = data.pdf_url;
+      if (p.verified?.length) {
+        for (const u of p.verified) {
+          const box = $('ffLogBox');
+          const line = document.createElement('div');
+          line.className = 'll';
+          const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
+          line.innerHTML = `<span class="lt">${ts}</span><span class="lok">\u{1f4ce} PDF LIVE: <a href="${esc(u)}" target="_blank" style="color:#1bc768;text-decoration:underline;word-break:break-all;cursor:pointer;user-select:all">${esc(u)}</a></span>`;
+          box.appendChild(line); box.scrollTop = box.scrollHeight;
+        }
+      } else if (p.candidates?.length) {
+        ffLog('\u{1f50d} PDF uploaded — checking possible URLs:', 'warn');
+        for (const u of p.candidates) {
+          const box = $('ffLogBox');
+          const line = document.createElement('div');
+          line.className = 'll';
+          line.innerHTML = `<span class="lt">&nbsp;</span><span class="lwarn" style="user-select:all;word-break:break-all">${esc(u)}</span>`;
+          box.appendChild(line); box.scrollTop = box.scrollHeight;
+        }
+      }
+    }
     show('ffCaptchaBtn');
     ffLog('Review and submit, then click "Next Row"', 'info');
     $('ffStatus').innerHTML = `<span class="count">${pos+1}</span> of <span class="count">${ffSchedule.length}</span> &middot; ${esc(job.name)} row ${step.rowIdx+1}`;
