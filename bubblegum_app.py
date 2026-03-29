@@ -732,7 +732,7 @@ def _fill_current_row():
 
 # ── Second Pass: Fill Empty Required Fields ──────────────────────────────────
 
-_SCAN_EMPTY_REQUIRED_JS = r"""
+_SCAN_ALL_EMPTY_JS = r"""
 (function() {
     var results = [];
     var seen = new Set();
@@ -757,21 +757,6 @@ _SCAN_EMPTY_REQUIRED_JS = r"""
         }
         if (!label) label = el.getAttribute('aria-label') || el.placeholder || el.name || '';
         return label.replace(/\s+/g, ' ').substring(0, 200);
-    }
-
-    function isRequired(el) {
-        if (el.required || el.getAttribute('aria-required') === 'true') return true;
-        var container = el.closest('.gfield, .nf-field, .wpforms-field, .frm_form_field, .field');
-        if (container) {
-            if (container.classList.contains('gfield_contains_required')) return true;
-            if (container.classList.contains('nf-field-required')) return true;
-            if (container.classList.contains('wpforms-field-required')) return true;
-            if (container.classList.contains('frm_required_field')) return true;
-            if (container.querySelector('.gfield_required, .required, .req')) return true;
-        }
-        var label = getLabel(el);
-        if (label.includes('*')) return true;
-        return false;
     }
 
     function getOptions(el) {
@@ -807,7 +792,6 @@ _SCAN_EMPTY_REQUIRED_JS = r"""
         if (['hidden', 'submit', 'button', 'file', 'image', 'reset'].includes(type)) return;
         if (el.name && (el.name.includes('captcha') || el.name.includes('honeypot'))) return;
         if (el.className && /g-recaptcha|h-captcha/i.test(el.className)) return;
-        if (!isRequired(el)) return;
 
         var isEmpty = false;
         if (type === 'radio') {
@@ -842,23 +826,24 @@ _SCAN_EMPTY_REQUIRED_JS = r"""
 """
 
 
-def _fill_empty_required(driver):
-    """Find all empty required fields on the page and fill them using AI.
+def _fill_all_empty(driver):
+    """Find ALL empty visible fields on the page and fill them using AI.
+    Fills everything except file uploads and captchas.
     Returns {found, filled, errors} or None if nothing to do."""
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import Select
 
     try:
-        empty_fields = driver.execute_script(_SCAN_EMPTY_REQUIRED_JS)
+        empty_fields = driver.execute_script(_SCAN_ALL_EMPTY_JS)
     except Exception as e:
         print(f"[second-pass] JS scan failed: {e}", flush=True)
         return None
 
     if not empty_fields:
-        print("[second-pass] No empty required fields found.", flush=True)
+        print("[second-pass] No empty fields found — form is 100% filled.", flush=True)
         return None
 
-    print(f"[second-pass] Found {len(empty_fields)} empty required field(s).", flush=True)
+    print(f"[second-pass] Found {len(empty_fields)} empty field(s) to fill.", flush=True)
 
     # Build prompt for AI
     lines = []
@@ -868,18 +853,26 @@ def _fill_empty_required(driver):
             desc += f' — placeholder: "{f["placeholder"]}"'
         if f.get("options"):
             desc += f' — options: {" | ".join(f["options"])}'
-        else:
-            desc += ' — required'
         lines.append(f"{i}. {desc}")
 
     prompt = (
-        "Here are empty required fields on a web form that need to be filled.\n"
-        "Generate realistic data for an average US adult.\n"
-        "For text areas that need descriptions or paragraphs, write 2-3 sentences.\n"
-        "For emails, use a realistic format. For phone numbers, use US format.\n\n"
+        "You MUST fill ALL of these empty form fields. Do NOT skip any.\n"
+        "Generate realistic data for an average US adult.\n\n"
+        "Rules:\n"
+        "- For checkboxes (agreements, terms, consent, newsletters): ALWAYS set to \"true\"\n"
+        "- For text areas / descriptions / comments: write 2-3 realistic sentences\n"
+        "- For emails: use realistic format like firstname.lastname@gmail.com\n"
+        "- For phone numbers: use US format (xxx) xxx-xxxx\n"
+        "- For date fields: use a recent date in YYYY-MM-DD format\n"
+        "- For selects/radios: pick the FIRST reasonable option from the list\n"
+        "- For name fields: use realistic American names\n"
+        "- For address fields: use a realistic US address\n"
+        "- For URLs/websites: use a realistic .com URL\n"
+        "- For number fields: use a reasonable number\n"
+        "- EVERY field must have a value. No blanks. No nulls.\n\n"
         "FIELDS:\n" + "\n".join(lines) + "\n\n"
         "Return ONLY a JSON object mapping field numbers (as strings) to values.\n"
-        'Example: {"1": "John", "2": "Option A", "3": "A short paragraph..."}\n'
+        'Example: {"1": "John", "2": "true", "3": "Option A", "4": "A short paragraph..."}\n'
         "No markdown fences, no explanation — just the JSON object."
     )
 
@@ -901,14 +894,20 @@ def _fill_empty_required(driver):
     fill_errors = []
 
     for i, field in enumerate(empty_fields, 1):
-        val = values.get(str(i))
-        if val is None:
-            continue
-        val = str(val).strip()
-        if not val:
-            continue
-
         ftype = field["type"]
+
+        # Checkboxes: always check them regardless of AI response
+        if ftype == 'checkbox':
+            val = "true"
+        else:
+            val = values.get(str(i))
+            if val is None:
+                fill_errors.append(f"AI skipped field #{i} ({field.get('label', '')})")
+                continue
+            val = str(val).strip()
+            if not val:
+                fill_errors.append(f"AI returned blank for #{i} ({field.get('label', '')})")
+                continue
         fid = field["id"]
         fname = field["name"]
 
@@ -1420,7 +1419,7 @@ class QuietHandler(SimpleHTTPRequestHandler):
         # Second pass: fill any empty required fields the CSV missed
         with _filler_lock:
             try:
-                sp = _fill_empty_required(_filler_driver)
+                sp = _fill_all_empty(_filler_driver)
                 if sp:
                     result['second_pass'] = sp
             except Exception as e:
@@ -1437,7 +1436,7 @@ class QuietHandler(SimpleHTTPRequestHandler):
             result = _fill_current_row()
         with _filler_lock:
             try:
-                sp = _fill_empty_required(_filler_driver)
+                sp = _fill_all_empty(_filler_driver)
                 if sp:
                     result['second_pass'] = sp
             except Exception as e:
@@ -1495,7 +1494,7 @@ class QuietHandler(SimpleHTTPRequestHandler):
             result = _fill_current_row()
 
             try:
-                sp = _fill_empty_required(_filler_driver)
+                sp = _fill_all_empty(_filler_driver)
                 if sp:
                     result['second_pass'] = sp
             except Exception as e:
