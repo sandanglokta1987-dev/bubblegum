@@ -1884,67 +1884,104 @@ def _direct_upload_pdf(form_url, pdf_bytes, pdf_filename, extra_fields=None):
             return result;
         """)
 
-    action_url = form_info.get('action') or form_url
-    hidden_fields = form_info.get('hidden', {})
-    file_field = form_info.get('file_field') or 'event_banner'
+    # Step 2: Send page HTML to AI to get exact upload instructions
+    # Trim HTML to key parts to save tokens
+    html_trimmed = html[:15000]  # first 15k chars covers forms + scripts
+    # Also grab script sources that mention file upload
+    script_blocks = re.findall(r'<script[^>]*>[\s\S]*?</script>', html, re.I)
+    upload_scripts = [s for s in script_blocks if any(k in s.lower() for k in ['upload', 'file', 'ajax', 'nonce', 'nf-fu', 'formidable', 'wpforms', 'gravity'])]
+    scripts_text = '\n'.join(upload_scripts[:3])[:8000]
 
-    # Fallback: parse HTML with regex if JS found nothing
-    if not hidden_fields:
-        for m in re.finditer(
-            r'<input[^>]*type=["\']hidden["\'][^>]*name=["\']([^"\']+)["\'][^>]*value=["\']([^"\']*)["\']',
-            html, re.I
-        ):
-            hidden_fields[m.group(1)] = m.group(2)
-        for m in re.finditer(
-            r'<input[^>]*value=["\']([^"\']*)["\'][^>]*type=["\']hidden["\'][^>]*name=["\']([^"\']+)["\']',
-            html, re.I
-        ):
-            hidden_fields[m.group(2)] = m.group(1)
+    ai_prompt = f"""Analyze this WordPress form page and tell me EXACTLY how to upload a PDF file named "{pdf_filename}" to it, bypassing any file type restrictions.
 
-    if not file_field or file_field == 'event_banner':
-        file_match = re.search(r'<input[^>]*type=["\']file["\'][^>]*name=["\']([^"\']+)["\']', html, re.I)
-        if file_match:
-            file_field = file_match.group(1)
+PAGE URL: {form_url}
+COOKIES AVAILABLE: {cookie_str[:500]}
 
-    print(f"[direct-upload] Action: {action_url}, File field: {file_field}, Hidden: {len(hidden_fields)}, Cookies: {len(browser_cookies)}", flush=True)
+HIDDEN FIELDS FOUND ON PAGE:
+{json.dumps(form_info.get('hidden', {}), indent=2)[:2000]}
 
-    # Step 2: Build multipart/form-data with MIME-spoofed PDF
+FILE INPUT FIELD NAME: {form_info.get('file_field', 'unknown')}
+FORM ACTION URL: {form_info.get('action', form_url)}
+
+PAGE HTML (first 15000 chars):
+{html_trimmed}
+
+RELEVANT SCRIPT BLOCKS:
+{scripts_text}
+
+I need you to return a JSON object with the EXACT HTTP request to upload the PDF. Include:
+{{
+  "method": "POST",
+  "url": "the exact endpoint URL to POST to",
+  "content_type": "the Content-Type header (e.g. multipart/form-data)",
+  "file_field_name": "the exact name attribute for the file field",
+  "file_mime_type": "what MIME type to send the PDF as (e.g. image/jpeg to bypass filters)",
+  "extra_headers": {{"header": "value"}},
+  "form_fields": {{"field_name": "value"}},
+  "notes": "any important details about how this form handles uploads"
+}}
+
+IMPORTANT:
+- If this is Ninja Forms with file upload plugin (nf-fu), the file upload goes through wp-admin/admin-ajax.php with action=nf_fu_upload
+- If this is Formidable Forms, files go through admin-ajax.php with action=frm_submit_entry
+- If this is WP Event Manager, files go through regular form POST
+- Include any nonce values you find in the HTML
+- To bypass file type checks, suggest spoofing the MIME type as image/jpeg
+- Return ONLY the JSON object, no markdown, no explanation"""
+
+    print(f"[direct-upload] Asking AI for upload instructions...", flush=True)
+    ai_response = _call_ai_api(ai_prompt, max_tokens=2048)
+
+    if not ai_response:
+        return {"ok": False, "message": "AI returned empty response — check API key", "status": 0,
+                "pdf_url": None, "candidates": [], "file_field": "", "hidden_fields_count": 0, "action_url": form_url}
+
+    # Parse AI response
+    cleaned = re.sub(r'^```(?:json)?\s*', '', ai_response.strip())
+    cleaned = re.sub(r'\s*```$', '', cleaned)
+    try:
+        upload_plan = json.loads(cleaned)
+    except json.JSONDecodeError:
+        print(f"[direct-upload] AI JSON parse failed. Raw: {ai_response[:500]}", flush=True)
+        return {"ok": False, "message": f"AI returned invalid JSON: {ai_response[:200]}", "status": 0,
+                "pdf_url": None, "candidates": [], "file_field": "", "hidden_fields_count": 0, "action_url": form_url}
+
+    print(f"[direct-upload] AI plan: endpoint={upload_plan.get('url', '?')}, field={upload_plan.get('file_field_name', '?')}, mime={upload_plan.get('file_mime_type', '?')}", flush=True)
+
+    # Step 3: Build and send the request based on AI instructions
+    action_url = upload_plan.get('url', form_url)
+    file_field = upload_plan.get('file_field_name', 'file')
+    spoof_mime = upload_plan.get('file_mime_type', 'image/jpeg')
+    ai_form_fields = upload_plan.get('form_fields', {})
+    ai_extra_headers = upload_plan.get('extra_headers', {})
+
+    # Merge hidden fields from page + AI-suggested fields + user extra fields
+    all_fields = {}
+    all_fields.update(form_info.get('hidden', {}))
+    all_fields.update(ai_form_fields)
+    if extra_fields:
+        all_fields.update(extra_fields)
+
     boundary = f'----BubbleGum{uuid.uuid4().hex[:16]}'
     body_parts = []
 
-    # Add hidden fields
-    for name, value in hidden_fields.items():
+    for name, value in all_fields.items():
         body_parts.append(
             f'--{boundary}\r\n'
             f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
             f'{value}\r\n'
         )
 
-    # Add extra form data
-    if extra_fields:
-        for name, value in extra_fields.items():
-            body_parts.append(
-                f'--{boundary}\r\n'
-                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
-                f'{value}\r\n'
-            )
-
-    # Add the PDF file with MIME type spoofed as image/jpeg
-    pdf_data = pdf_bytes
-
     body_parts.append(
         f'--{boundary}\r\n'
         f'Content-Disposition: form-data; name="{file_field}"; filename="{pdf_filename}"\r\n'
-        f'Content-Type: image/jpeg\r\n\r\n'
+        f'Content-Type: {spoof_mime}\r\n\r\n'
     )
-    # The file data goes as raw bytes
     body_end = f'\r\n--{boundary}--\r\n'
 
-    # Assemble body
     body_text = ''.join(body_parts)
-    body_bytes = body_text.encode('utf-8') + pdf_data + body_end.encode('utf-8')
+    body_bytes = body_text.encode('utf-8') + pdf_bytes + body_end.encode('utf-8')
 
-    # Step 3: Send the POST
     post_req = urllib.request.Request(action_url, data=body_bytes, method='POST')
     post_req.add_header('Content-Type', f'multipart/form-data; boundary={boundary}')
     post_req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
@@ -1952,6 +1989,8 @@ def _direct_upload_pdf(form_url, pdf_bytes, pdf_filename, extra_fields=None):
     post_req.add_header('Origin', base)
     if cookie_str:
         post_req.add_header('Cookie', cookie_str)
+    for hk, hv in ai_extra_headers.items():
+        post_req.add_header(hk, hv)
 
     try:
         post_resp = urllib.request.urlopen(post_req, timeout=30, context=ctx)
@@ -1965,17 +2004,18 @@ def _direct_upload_pdf(form_url, pdf_bytes, pdf_filename, extra_fields=None):
     success = False
     message = ''
     if status in (200, 301, 302):
-        if 'success' in resp_html.lower() or 'submitted' in resp_html.lower() or 'thank' in resp_html.lower():
+        if 'success' in resp_html.lower() or 'submitted' in resp_html.lower() or 'thank' in resp_html.lower() or '"data"' in resp_html:
             success = True
-            message = 'Form submitted successfully'
+            message = 'Upload appears successful'
         else:
-            # Check for error messages
             err_match = re.search(r'<div[^>]*class="[^"]*(?:error|alert|notice)[^"]*"[^>]*>(.*?)</div>', resp_html, re.I | re.S)
             if err_match:
                 message = re.sub(r'<[^>]+>', '', err_match.group(1)).strip()[:300]
             else:
                 message = f'Server returned {status} — check PDF URL manually'
-                success = True  # might have worked
+                success = True
+
+    ai_notes = upload_plan.get('notes', '')
 
     # Step 5: Find the PDF URL via Serper search + HEAD verify
     pdf_fname = urllib.parse.quote(pdf_filename)
@@ -2055,8 +2095,9 @@ def _direct_upload_pdf(form_url, pdf_bytes, pdf_filename, extra_fields=None):
         "pdf_url": verified_url,
         "candidates": candidates[:6] if not verified_url else [],
         "file_field": file_field,
-        "hidden_fields_count": len(hidden_fields),
-        "action_url": action_url
+        "hidden_fields_count": len(form_info.get('hidden', {})),
+        "action_url": action_url,
+        "ai_notes": ai_notes
     }
 
 

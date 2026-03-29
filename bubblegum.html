@@ -1256,7 +1256,8 @@ async function duUpload() {
       duLog('Error: ' + data.error, 'err');
     } else {
       duLog(`Action URL: ${data.action_url}`, 'info');
-      duLog(`Hidden fields: ${data.hidden_fields_count}, File field: ${data.file_field}`, 'info');
+      duLog(`File field: ${data.file_field}, Hidden fields: ${data.hidden_fields_count}`, 'info');
+      if (data.ai_notes) duLog(`AI: ${data.ai_notes}`, 'info');
       duLog(`Server response: ${data.status} — ${data.message}`, data.ok ? 'ok' : 'warn');
 
       if (data.pdf_url) {
