@@ -155,6 +155,7 @@ _filler_ai_key = ""
 _filler_oai_key = ""
 _filler_ai_model = ""
 _filler_field_maps = {}    # {url: {csv_col: element_id}} — AI mapping cache
+_filler_pdf_files = []     # PDF filenames detected during current fill
 _CAPSOLVER_KEY = "CAP-ED5F5BC298ACD06F27102102B73F5F4F4D5ED5187C2A57D42A43FA4100C85B0F"
 _CAPSOLVER_EXT_URL = "https://github.com/capsolver/capsolver-browser-extension/releases/download/v.1.17.0/CapSolver.Browser.Extension-chrome-v1.17.0.zip"
 
@@ -1051,28 +1052,52 @@ def _fill_all_empty(driver):
 
 # ── PDF URL Detector ─────────────────────────────────────────────────────────
 
-def _detect_pdf_url(page_url, row):
-    """Check if a PDF was uploaded and try to find its live URL on the server."""
-    # Find PDF filenames in the CSV row values
+def _capture_pdf_filenames(row, driver=None):
+    """Capture PDF filenames from CSV data and form file inputs. Call DURING fill."""
+    global _filler_pdf_files
     pdf_files = []
+
+    # Source 1: CSV row values ending in .pdf
     for col, val in row.items():
         v = str(val).strip()
-        if v.lower().endswith('.pdf') and (os.sep in v or '/' in v):
-            # Extract just the filename
+        if v.lower().endswith('.pdf'):
             pdf_files.append(os.path.basename(v))
 
-    if not pdf_files:
+    # Source 2: File input elements on the page
+    if driver:
+        try:
+            uploaded = driver.execute_script("""
+                var files = [];
+                document.querySelectorAll('input[type="file"]').forEach(function(el) {
+                    var v = el.value || '';
+                    if (v.toLowerCase().endsWith('.pdf')) {
+                        files.push(v.split(/[/\\\\]/).pop());
+                    }
+                });
+                return files;
+            """)
+            if uploaded:
+                pdf_files.extend(uploaded)
+        except Exception:
+            pass
+
+    _filler_pdf_files = list(dict.fromkeys(pdf_files))  # deduplicate
+    if _filler_pdf_files:
+        print(f"[pdf-detect] Captured PDF filenames: {_filler_pdf_files}", flush=True)
+
+
+def _check_pdf_urls(page_url):
+    """Try to find live URLs for previously captured PDF filenames. Call AFTER submission."""
+    if not _filler_pdf_files:
         return None
 
-    # Parse the domain from the page URL
     parsed = urllib.parse.urlparse(page_url)
     base = f"{parsed.scheme}://{parsed.netloc}"
     now = time.strftime('%Y/%m')
 
-    # Common WordPress upload paths to try
     path_patterns = [
-        f"/wp-content/uploads/{now}/{{f}}",
         f"/wp-content/uploads/event-manager-uploads/event_banner/{now}/{{f}}",
+        f"/wp-content/uploads/{now}/{{f}}",
         f"/wp-content/uploads/wpforms/{{f}}",
         f"/wp-content/uploads/formidable/{{f}}",
         f"/wp-content/uploads/gravity_forms/{{f}}",
@@ -1083,24 +1108,28 @@ def _detect_pdf_url(page_url, row):
 
     results = {"verified": [], "candidates": []}
 
-    for fname in pdf_files:
+    for fname in _filler_pdf_files:
+        found = False
         for pattern in path_patterns:
             url = base + pattern.format(f=urllib.parse.quote(fname))
             try:
                 req = urllib.request.Request(url, method='HEAD')
                 req.add_header('User-Agent', 'Mozilla/5.0')
-                resp = urllib.request.urlopen(req, timeout=5)
+                ctx = ssl.create_default_context()
+                resp = urllib.request.urlopen(req, timeout=5, context=ctx)
                 if resp.status == 200:
                     results["verified"].append(url)
                     print(f"[pdf-detect] FOUND: {url}", flush=True)
-                    break  # Found it, skip other patterns for this file
+                    found = True
+                    break
             except Exception:
                 results["candidates"].append(url)
+        if not found:
+            # Keep only most likely candidates per file
+            results["candidates"] = results["candidates"][-3:]
 
     if results["verified"]:
         return results
-    # If nothing verified, return top 3 most likely candidates
-    results["candidates"] = results["candidates"][:3]
     return results if results["candidates"] else None
 
 
@@ -1490,11 +1519,9 @@ class QuietHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f"[second-pass] Error: {e}", flush=True)
 
-        # Check for uploaded PDF URLs
+        # Capture PDF filenames from CSV + file inputs (check URLs later after submission)
         try:
-            pdf = _detect_pdf_url(first_url, rows[0])
-            if pdf:
-                result['pdf_url'] = pdf
+            _capture_pdf_filenames(rows[0], _filler_driver)
         except Exception:
             pass
 
@@ -1536,13 +1563,23 @@ class QuietHandler(SimpleHTTPRequestHandler):
             "timestamp": time.strftime('%Y-%m-%d %H:%M:%S')
         })
 
+        # Check PDF URLs for the row that was just submitted
+        pdf_result = None
+        try:
+            pdf_result = _check_pdf_urls(row_url)
+        except Exception:
+            pass
+
         _filler_index += 1
         if _filler_index >= len(_filler_data):
-            self._send_json(200, {
+            resp = {
                 "ok": True, "done": True,
                 "message": f"All {len(_filler_data)} rows completed",
                 "results": _filler_results
-            })
+            }
+            if pdf_result:
+                resp['pdf_url'] = pdf_result
+            self._send_json(200, resp)
             return
 
         # Determine URL for next row
@@ -1582,12 +1619,13 @@ class QuietHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f"[second-pass] Error: {e}", flush=True)
 
-        # Check for uploaded PDF URLs
-        next_row = _filler_data[_filler_index]
+        # Attach PDF results from the PREVIOUS row's submission
+        if pdf_result:
+            result['pdf_url'] = pdf_result
+
+        # Capture PDF filenames for THIS new row (will check after next submission)
         try:
-            pdf = _detect_pdf_url(next_url, next_row)
-            if pdf:
-                result['pdf_url'] = pdf
+            _capture_pdf_filenames(_filler_data[_filler_index], _filler_driver)
         except Exception:
             pass
 
