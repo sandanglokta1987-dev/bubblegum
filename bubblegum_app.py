@@ -1239,6 +1239,8 @@ class QuietHandler(SimpleHTTPRequestHandler):
             self._handle_filler_stop()
         elif parsed.path == '/filler/trigger-captcha':
             self._handle_trigger_captcha()
+        elif parsed.path == '/direct-upload':
+            self._handle_direct_upload()
         else:
             self.send_error(404)
 
@@ -1785,6 +1787,187 @@ class QuietHandler(SimpleHTTPRequestHandler):
         with _filler_lock:
             _close_filler_driver()
         self._send_json(200, {"ok": True, "message": "Session stopped", "results": results})
+
+    def _handle_direct_upload(self):
+        """Upload a PDF to a WordPress form via direct POST with MIME spoofing."""
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length)
+        try:
+            data = json.loads(body)
+        except Exception:
+            self._send_json(400, {"error": "Invalid JSON"})
+            return
+
+        form_url = data.get('url', '').strip()
+        pdf_path = data.get('pdf_path', '').strip()
+        form_data = data.get('form_data', {})  # {field_name: value}
+
+        if not form_url or not pdf_path:
+            self._send_json(400, {"error": "Missing url or pdf_path"})
+            return
+        if not os.path.isfile(pdf_path):
+            self._send_json(400, {"error": f"File not found: {pdf_path}"})
+            return
+
+        try:
+            result = _direct_upload_pdf(form_url, pdf_path, form_data)
+            self._send_json(200, result)
+        except Exception as e:
+            self._send_json(500, {"error": str(e)[:500]})
+
+
+# ── Direct PDF Upload (MIME spoof) ───────────────────────────────────────────
+
+def _direct_upload_pdf(form_url, pdf_path, extra_fields=None):
+    """Fetch form page, extract fields, POST with PDF MIME-spoofed as image."""
+    ctx = ssl.create_default_context()
+
+    # Step 1: Fetch the form page to get hidden fields, cookies, action URL
+    req = urllib.request.Request(form_url)
+    req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+    resp = urllib.request.urlopen(req, timeout=15, context=ctx)
+    html = resp.read().decode('utf-8', errors='replace')
+    cookies = resp.headers.get_all('Set-Cookie') or []
+    cookie_str = '; '.join(c.split(';')[0] for c in cookies)
+
+    # Parse form action and hidden fields
+    parsed_url = urllib.parse.urlparse(form_url)
+    base = f"{parsed_url.scheme}://{parsed_url.netloc}"
+
+    # Find form action
+    action_match = re.search(r'<form[^>]*action=["\']([^"\']*)["\']', html, re.I)
+    action_url = form_url  # default: post to same URL
+    if action_match:
+        act = action_match.group(1)
+        if act.startswith('http'):
+            action_url = act
+        elif act.startswith('/'):
+            action_url = base + act
+        else:
+            action_url = form_url.rsplit('/', 1)[0] + '/' + act
+
+    # Extract all hidden inputs and form fields
+    hidden_fields = {}
+    for m in re.finditer(
+        r'<input[^>]*type=["\']hidden["\'][^>]*name=["\']([^"\']+)["\'][^>]*value=["\']([^"\']*)["\']',
+        html, re.I
+    ):
+        hidden_fields[m.group(1)] = m.group(2)
+    # Also try reverse order (value before name)
+    for m in re.finditer(
+        r'<input[^>]*value=["\']([^"\']*)["\'][^>]*type=["\']hidden["\'][^>]*name=["\']([^"\']+)["\']',
+        html, re.I
+    ):
+        hidden_fields[m.group(2)] = m.group(1)
+
+    # Find the file input field name
+    file_field = 'event_banner'  # default for WP Event Manager
+    file_match = re.search(r'<input[^>]*type=["\']file["\'][^>]*name=["\']([^"\']+)["\']', html, re.I)
+    if file_match:
+        file_field = file_match.group(1)
+
+    # Step 2: Build multipart/form-data with MIME-spoofed PDF
+    boundary = f'----BubbleGum{uuid.uuid4().hex[:16]}'
+    body_parts = []
+
+    # Add hidden fields
+    for name, value in hidden_fields.items():
+        body_parts.append(
+            f'--{boundary}\r\n'
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+            f'{value}\r\n'
+        )
+
+    # Add extra form data
+    if extra_fields:
+        for name, value in extra_fields.items():
+            body_parts.append(
+                f'--{boundary}\r\n'
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+                f'{value}\r\n'
+            )
+
+    # Add the PDF file with MIME type spoofed as image/jpeg
+    pdf_filename = os.path.basename(pdf_path)
+    with open(pdf_path, 'rb') as f:
+        pdf_data = f.read()
+
+    body_parts.append(
+        f'--{boundary}\r\n'
+        f'Content-Disposition: form-data; name="{file_field}"; filename="{pdf_filename}"\r\n'
+        f'Content-Type: image/jpeg\r\n\r\n'
+    )
+    # The file data goes as raw bytes
+    body_end = f'\r\n--{boundary}--\r\n'
+
+    # Assemble body
+    body_text = ''.join(body_parts)
+    body_bytes = body_text.encode('utf-8') + pdf_data + body_end.encode('utf-8')
+
+    # Step 3: Send the POST
+    post_req = urllib.request.Request(action_url, data=body_bytes, method='POST')
+    post_req.add_header('Content-Type', f'multipart/form-data; boundary={boundary}')
+    post_req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+    post_req.add_header('Referer', form_url)
+    post_req.add_header('Origin', base)
+    if cookie_str:
+        post_req.add_header('Cookie', cookie_str)
+
+    try:
+        post_resp = urllib.request.urlopen(post_req, timeout=30, context=ctx)
+        resp_html = post_resp.read().decode('utf-8', errors='replace')
+        status = post_resp.status
+    except urllib.error.HTTPError as e:
+        resp_html = e.read().decode('utf-8', errors='replace') if e.fp else ''
+        status = e.code
+
+    # Step 4: Check if upload succeeded
+    success = False
+    message = ''
+    if status in (200, 301, 302):
+        if 'success' in resp_html.lower() or 'submitted' in resp_html.lower() or 'thank' in resp_html.lower():
+            success = True
+            message = 'Form submitted successfully'
+        else:
+            # Check for error messages
+            err_match = re.search(r'<div[^>]*class="[^"]*(?:error|alert|notice)[^"]*"[^>]*>(.*?)</div>', resp_html, re.I | re.S)
+            if err_match:
+                message = re.sub(r'<[^>]+>', '', err_match.group(1)).strip()[:300]
+            else:
+                message = f'Server returned {status} — check PDF URL manually'
+                success = True  # might have worked
+
+    # Step 5: Try to find the PDF URL
+    now = time.strftime('%Y/%m')
+    pdf_fname = urllib.parse.quote(pdf_filename)
+    candidates = [
+        f"{base}/wp-content/uploads/event-manager-uploads/event_banner/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/{pdf_fname}",
+    ]
+
+    verified_url = None
+    for url in candidates:
+        try:
+            check = urllib.request.Request(url, method='HEAD')
+            check.add_header('User-Agent', 'Mozilla/5.0')
+            check_resp = urllib.request.urlopen(check, timeout=5, context=ctx)
+            if check_resp.status == 200:
+                verified_url = url
+                break
+        except Exception:
+            pass
+
+    return {
+        "ok": success,
+        "message": message,
+        "status": status,
+        "pdf_url": verified_url,
+        "candidates": candidates if not verified_url else [],
+        "file_field": file_field,
+        "hidden_fields_count": len(hidden_fields),
+        "action_url": action_url
+    }
 
 
 # ── Server Lifecycle ─────────────────────────────────────────────────────────

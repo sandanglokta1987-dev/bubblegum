@@ -261,6 +261,7 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
   <div class="tab-switcher">
     <button class="tab-btn active" id="tabExtractor">Form Extractor</button>
     <button class="tab-btn" id="tabFiller">Form Filler</button>
+    <button class="tab-btn" id="tabDirect">Direct Upload</button>
   </div>
 
   <div class="card" id="keysCard">
@@ -378,6 +379,37 @@ input:focus,select:focus{border-color:var(--pink);background:var(--surface3);}
       <div class="sl">Filling Status</div>
       <div class="logbox" id="ffLogBox"></div>
       <div class="filler-status" id="ffStatus"></div>
+    </div>
+  </div>
+
+  <div id="directTab" class="hidden">
+    <div class="card">
+      <div class="sl">Direct PDF Upload</div>
+      <div class="tier-hint">Bypass file type restrictions. Uploads PDF directly via HTTP POST with MIME spoofing. No browser needed. Works on WordPress Event Manager and similar forms.</div>
+      <div class="field">
+        <label>Form Page URL <span class="req">*</span></label>
+        <input type="url" id="duUrl" placeholder="https://example.com/post-an-event/">
+      </div>
+      <div class="field">
+        <label>PDF File <span class="req">*</span></label>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <input type="file" id="duFileInput" accept=".pdf" style="display:none">
+          <button class="btn-outline" onclick="document.getElementById('duFileInput').click()">Choose PDF</button>
+          <span id="duFileName" style="font-family:var(--mono);font-size:13px;color:var(--hint);">No file selected</span>
+        </div>
+        <input type="text" id="duFilePath" placeholder="Or paste full file path: C:\Users\...\file.pdf" style="margin-top:8px;">
+      </div>
+      <div class="field">
+        <label>Extra Form Fields <span class="opt">optional &middot; one per line: field_name=value</span></label>
+        <textarea id="duFields" rows="4" placeholder="event_title=Community Health Fair&#10;event_description=Join us for...&#10;your_email=john@gmail.com" style="font-family:var(--mono);font-size:13px;"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="duUploadBtn">Upload PDF &rarr;</button>
+      </div>
+    </div>
+    <div class="card hidden" id="duResultCard">
+      <div class="sl">Upload Result</div>
+      <div class="logbox" id="duLogBox"></div>
     </div>
   </div>
 
@@ -1164,12 +1196,96 @@ function ffDownloadResults() {
 
 // ─── TAB / TIER SWITCHING ──────────────────────────────────────
 
+// ── Direct Upload ──────────────────────────────────────────────────────
+function duLog(msg, type = 'info') {
+  const box = $('duLogBox');
+  const line = document.createElement('div');
+  line.className = 'll';
+  const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  const cls = type === 'ok' ? 'lok' : type === 'warn' ? 'lwarn' : type === 'err' ? 'lerr' : 'linfo';
+  if (type === 'link') {
+    line.innerHTML = `<span class="lt">${ts}</span><span class="lok" style="user-select:all;word-break:break-all">${msg}</span>`;
+  } else {
+    line.innerHTML = `<span class="lt">${ts}</span><span class="${cls}">${esc(msg)}</span>`;
+  }
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function duUpload() {
+  const url = $('duUrl').value.trim();
+  const filePath = $('duFilePath').value.trim();
+  if (!url) { alert('Enter the form page URL'); return; }
+  if (!filePath) { alert('Select or enter a PDF file path'); return; }
+
+  // Parse extra fields
+  const fieldsText = $('duFields').value.trim();
+  const formData = {};
+  if (fieldsText) {
+    for (const line of fieldsText.split('\n')) {
+      const eq = line.indexOf('=');
+      if (eq > 0) formData[line.substring(0, eq).trim()] = line.substring(eq + 1).trim();
+    }
+  }
+
+  show('duResultCard');
+  $('duLogBox').innerHTML = '';
+  $('duUploadBtn').disabled = true;
+  $('duUploadBtn').textContent = 'Uploading...';
+
+  duLog(`Uploading ${filePath} to ${url}`, 'info');
+  duLog('Fetching form page, extracting fields...', 'info');
+
+  try {
+    const res = await fetch('/direct-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, pdf_path: filePath, form_data: formData })
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      duLog('Error: ' + data.error, 'err');
+    } else {
+      duLog(`Action URL: ${data.action_url}`, 'info');
+      duLog(`Hidden fields: ${data.hidden_fields_count}, File field: ${data.file_field}`, 'info');
+      duLog(`Server response: ${data.status} — ${data.message}`, data.ok ? 'ok' : 'warn');
+
+      if (data.pdf_url) {
+        duLog('\u{1f4ce} PDF LIVE:', 'ok');
+        const link = document.createElement('div');
+        link.className = 'll';
+        link.innerHTML = `<span class="lt">&nbsp;</span><span class="lok"><a href="${esc(data.pdf_url)}" target="_blank" style="color:#1bc768;text-decoration:underline;word-break:break-all;cursor:pointer;user-select:all">${esc(data.pdf_url)}</a></span>`;
+        $('duLogBox').appendChild(link);
+        $('duLogBox').scrollTop = $('duLogBox').scrollHeight;
+      } else if (data.candidates?.length) {
+        duLog('PDF not verified yet. Try these URLs:', 'warn');
+        for (const c of data.candidates) {
+          const cline = document.createElement('div');
+          cline.className = 'll';
+          cline.innerHTML = `<span class="lt">&nbsp;</span><span class="lwarn" style="user-select:all;word-break:break-all">${esc(c)}</span>`;
+          $('duLogBox').appendChild(cline);
+        }
+        $('duLogBox').scrollTop = $('duLogBox').scrollHeight;
+      }
+    }
+  } catch (e) {
+    duLog('Failed: ' + e.message, 'err');
+  }
+
+  $('duUploadBtn').disabled = false;
+  $('duUploadBtn').textContent = 'Upload PDF \u2192';
+}
+
 function switchTab(tab) {
   currentTab = tab;
   $('tabExtractor').className = tab === 'extractor' ? 'tab-btn active' : 'tab-btn';
   $('tabFiller').className = tab === 'filler' ? 'tab-btn active' : 'tab-btn';
-  if (tab === 'extractor') { show('extractorTab'); hide('fillerTab'); }
-  else { hide('extractorTab'); show('fillerTab'); }
+  $('tabDirect').className = tab === 'direct' ? 'tab-btn active' : 'tab-btn';
+  hide('extractorTab'); hide('fillerTab'); hide('directTab');
+  if (tab === 'extractor') show('extractorTab');
+  else if (tab === 'filler') show('fillerTab');
+  else if (tab === 'direct') show('directTab');
 }
 
 function switchTier(tier) {
@@ -1257,6 +1373,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('tabExtractor').addEventListener('click', () => switchTab('extractor'));
   $('tabFiller').addEventListener('click', () => switchTab('filler'));
+  $('tabDirect').addEventListener('click', () => switchTab('direct'));
+  $('duUploadBtn').addEventListener('click', duUpload);
+  $('duFileInput').addEventListener('change', function() {
+    if (this.files.length) {
+      $('duFileName').textContent = this.files[0].name;
+      $('duFilePath').value = this.files[0].name;
+    }
+  });
   document.querySelectorAll('#tierSwitcher .tier-btn').forEach(b => b.addEventListener('click', () => switchTier(b.dataset.tier)));
   document.querySelectorAll('#feModeSwitcher .tier-btn').forEach(b => b.addEventListener('click', () => switchFeMode(b.dataset.femode)));
   $('feBtn').addEventListener('click', runFormExtraction);
