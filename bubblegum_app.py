@@ -1848,52 +1848,65 @@ class QuietHandler(SimpleHTTPRequestHandler):
 # ── Direct PDF Upload (MIME spoof) ───────────────────────────────────────────
 
 def _direct_upload_pdf(form_url, pdf_bytes, pdf_filename, extra_fields=None):
-    """Fetch form page, extract fields, POST with PDF MIME-spoofed as image."""
+    """Load form page via browser (bypasses WAF), then POST with MIME-spoofed PDF."""
     ctx = ssl.create_default_context()
-
-    # Step 1: Fetch the form page to get hidden fields, cookies, action URL
-    req = urllib.request.Request(form_url)
-    req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
-    resp = urllib.request.urlopen(req, timeout=15, context=ctx)
-    html = resp.read().decode('utf-8', errors='replace')
-    cookies = resp.headers.get_all('Set-Cookie') or []
-    cookie_str = '; '.join(c.split(';')[0] for c in cookies)
-
-    # Parse form action and hidden fields
     parsed_url = urllib.parse.urlparse(form_url)
     base = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
-    # Find form action
-    action_match = re.search(r'<form[^>]*action=["\']([^"\']*)["\']', html, re.I)
-    action_url = form_url  # default: post to same URL
-    if action_match:
-        act = action_match.group(1)
-        if act.startswith('http'):
-            action_url = act
-        elif act.startswith('/'):
-            action_url = base + act
-        else:
-            action_url = form_url.rsplit('/', 1)[0] + '/' + act
+    # Step 1: Use Edge browser to load page (bypasses WAF/Cloudflare/etc.)
+    print(f"[direct-upload] Loading {form_url} via browser...", flush=True)
+    with _edge_lock:
+        driver = _get_edge_driver()
+        driver.get(form_url)
+        time.sleep(3)
+        html = driver.page_source
 
-    # Extract all hidden inputs and form fields
-    hidden_fields = {}
-    for m in re.finditer(
-        r'<input[^>]*type=["\']hidden["\'][^>]*name=["\']([^"\']+)["\'][^>]*value=["\']([^"\']*)["\']',
-        html, re.I
-    ):
-        hidden_fields[m.group(1)] = m.group(2)
-    # Also try reverse order (value before name)
-    for m in re.finditer(
-        r'<input[^>]*value=["\']([^"\']*)["\'][^>]*type=["\']hidden["\'][^>]*name=["\']([^"\']+)["\']',
-        html, re.I
-    ):
-        hidden_fields[m.group(2)] = m.group(1)
+        # Extract cookies from browser session
+        browser_cookies = driver.get_cookies()
+        cookie_str = '; '.join(f"{c['name']}={c['value']}" for c in browser_cookies)
 
-    # Find the file input field name
-    file_field = 'event_banner'  # default for WP Event Manager
-    file_match = re.search(r'<input[^>]*type=["\']file["\'][^>]*name=["\']([^"\']+)["\']', html, re.I)
-    if file_match:
-        file_field = file_match.group(1)
+        # Extract form data via JS (more reliable than regex on rendered pages)
+        form_info = driver.execute_script("""
+            var forms = document.querySelectorAll('form');
+            var result = {action: '', hidden: {}, file_field: ''};
+            for (var f of forms) {
+                // Skip search forms
+                if (f.querySelector('input[type="file"]') || f.querySelectorAll('input, textarea, select').length > 3) {
+                    result.action = f.action || '';
+                    f.querySelectorAll('input[type="hidden"]').forEach(function(h) {
+                        if (h.name) result.hidden[h.name] = h.value || '';
+                    });
+                    var fileInput = f.querySelector('input[type="file"]');
+                    if (fileInput && fileInput.name) result.file_field = fileInput.name;
+                    break;
+                }
+            }
+            return result;
+        """)
+
+    action_url = form_info.get('action') or form_url
+    hidden_fields = form_info.get('hidden', {})
+    file_field = form_info.get('file_field') or 'event_banner'
+
+    # Fallback: parse HTML with regex if JS found nothing
+    if not hidden_fields:
+        for m in re.finditer(
+            r'<input[^>]*type=["\']hidden["\'][^>]*name=["\']([^"\']+)["\'][^>]*value=["\']([^"\']*)["\']',
+            html, re.I
+        ):
+            hidden_fields[m.group(1)] = m.group(2)
+        for m in re.finditer(
+            r'<input[^>]*value=["\']([^"\']*)["\'][^>]*type=["\']hidden["\'][^>]*name=["\']([^"\']+)["\']',
+            html, re.I
+        ):
+            hidden_fields[m.group(2)] = m.group(1)
+
+    if not file_field or file_field == 'event_banner':
+        file_match = re.search(r'<input[^>]*type=["\']file["\'][^>]*name=["\']([^"\']+)["\']', html, re.I)
+        if file_match:
+            file_field = file_match.group(1)
+
+    print(f"[direct-upload] Action: {action_url}, File field: {file_field}, Hidden: {len(hidden_fields)}, Cookies: {len(browser_cookies)}", flush=True)
 
     # Step 2: Build multipart/form-data with MIME-spoofed PDF
     boundary = f'----BubbleGum{uuid.uuid4().hex[:16]}'
