@@ -1523,7 +1523,8 @@ class QuietHandler(SimpleHTTPRequestHandler):
         self._send_json(200, result)
 
     def _handle_trigger_captcha(self):
-        """Click the reCAPTCHA/hCaptcha checkbox to make captcha visible for extension."""
+        """Make captcha visible on screen and click checkbox if present.
+        No auto-submit, no grecaptcha.execute(). User/solver handles the rest."""
         if not _filler_driver:
             self._send_json(400, {"error": "No browser open"})
             return
@@ -1531,52 +1532,28 @@ class QuietHandler(SimpleHTTPRequestHandler):
             from selenium.webdriver.common.by import By
             driver = _filler_driver
             with _filler_lock:
-                # Step 1: Move any captcha container into view and make it fully visible
+                # Move all captcha elements into view
                 driver.execute_script("""
-                    // Find all reCAPTCHA/hCaptcha containers and make them visible + centered
-                    var containers = document.querySelectorAll(
-                        '.g-recaptcha, .h-captcha, [data-sitekey], .grecaptcha-badge, .recaptcha-container'
-                    );
-                    containers.forEach(function(c) {
-                        c.style.position = 'relative';
-                        c.style.left = '0';
-                        c.style.right = 'auto';
-                        c.style.zIndex = '99999';
-                        c.style.opacity = '1';
-                        c.style.visibility = 'visible';
-                        c.style.display = 'block';
-                        c.style.overflow = 'visible';
-                        c.scrollIntoView({block: 'center'});
+                    var sels = ['.g-recaptcha', '.h-captcha', '[data-sitekey]',
+                        '.grecaptcha-badge', '.recaptcha-container'];
+                    sels.forEach(function(s) {
+                        document.querySelectorAll(s).forEach(function(c) {
+                            c.style.cssText = 'position:relative !important; left:0 !important; right:auto !important; z-index:99999 !important; opacity:1 !important; visibility:visible !important; display:block !important; overflow:visible !important;';
+                            c.scrollIntoView({block:'center'});
+                        });
                     });
-                    // Also fix any recaptcha iframes that are off-screen
-                    var iframes = document.querySelectorAll('iframe[src*="recaptcha"], iframe[src*="hcaptcha"]');
-                    iframes.forEach(function(f) {
-                        var p = f.parentElement;
-                        if (p) {
-                            p.style.position = 'relative';
-                            p.style.left = '0';
-                            p.style.right = 'auto';
-                            p.style.overflow = 'visible';
-                            p.style.zIndex = '99999';
+                    document.querySelectorAll('iframe[src*="recaptcha"], iframe[src*="hcaptcha"]').forEach(function(f) {
+                        if (f.parentElement) {
+                            f.parentElement.style.cssText = 'position:relative !important; left:0 !important; right:auto !important; overflow:visible !important; z-index:99999 !important;';
                         }
-                        f.scrollIntoView({block: 'center'});
+                        f.scrollIntoView({block:'center'});
                     });
-                    // Move the grecaptcha-badge (invisible recaptcha) into view
                     var badge = document.querySelector('.grecaptcha-badge');
-                    if (badge) {
-                        badge.style.right = 'auto';
-                        badge.style.left = '10px';
-                        badge.style.bottom = '10px';
-                        badge.style.width = '256px';
-                        badge.style.height = '60px';
-                        badge.style.overflow = 'visible';
-                        badge.style.opacity = '1';
-                        badge.style.visibility = 'visible';
-                    }
+                    if (badge) badge.style.cssText = 'right:auto !important; left:10px !important; bottom:10px !important; width:256px !important; height:60px !important; overflow:visible !important; opacity:1 !important; visibility:visible !important;';
                 """)
                 time.sleep(0.5)
 
-                # Step 2: Try reCAPTCHA checkbox iframe
+                # Try reCAPTCHA checkbox
                 iframes = driver.find_elements(By.CSS_SELECTOR, 'iframe[src*="recaptcha/api2/anchor"]')
                 if iframes:
                     driver.execute_script("arguments[0].scrollIntoView({block:'center'});", iframes[0])
@@ -1591,32 +1568,7 @@ class QuietHandler(SimpleHTTPRequestHandler):
                     self._send_json(200, {"ok": True, "message": "Clicked reCAPTCHA checkbox"})
                     return
 
-                # Step 3: Invisible reCAPTCHA — click the form's own submit button
-                # so the form's JS triggers grecaptcha.execute() naturally.
-                # The solver will intercept the challenge and solve it in real time.
-                has_invisible = driver.execute_script("""
-                    if (typeof grecaptcha === 'undefined') return 'none';
-                    var btn = document.querySelector(
-                        'input[type="submit"], button[type="submit"], .gform_button, '
-                        + '.submit-btn, button.submit, #submit, .nf-element[type="submit"], '
-                        + '.wpforms-submit, .frm_button_submit, .wpcf7-submit, '
-                        + 'button[name="submit"], input[name="submit"]'
-                    );
-                    if (btn) {
-                        btn.scrollIntoView({block: 'center'});
-                        btn.click();
-                        return 'clicked';
-                    }
-                    return 'no_button';
-                """)
-                if has_invisible == 'clicked':
-                    self._send_json(200, {"ok": True, "message": "Clicked Submit — solver will handle invisible reCAPTCHA"})
-                    return
-                if has_invisible == 'no_button':
-                    self._send_json(200, {"ok": False, "message": "Invisible reCAPTCHA detected but no submit button found"})
-                    return
-
-                # Step 4: Try hCaptcha iframe
+                # Try hCaptcha checkbox
                 iframes = driver.find_elements(By.CSS_SELECTOR, 'iframe[src*="hcaptcha.com"]')
                 if iframes:
                     driver.execute_script("arguments[0].scrollIntoView({block:'center'});", iframes[0])
@@ -1631,7 +1583,12 @@ class QuietHandler(SimpleHTTPRequestHandler):
                     self._send_json(200, {"ok": True, "message": "Clicked hCaptcha checkbox"})
                     return
 
-                self._send_json(200, {"ok": False, "message": "No captcha found on page"})
+                # No checkbox found — invisible captcha, just repositioned into view
+                has_captcha = driver.execute_script("return typeof grecaptcha !== 'undefined' || !!document.querySelector('.grecaptcha-badge, [data-sitekey]');")
+                if has_captcha:
+                    self._send_json(200, {"ok": True, "message": "Invisible captcha moved into view — click Submit manually"})
+                else:
+                    self._send_json(200, {"ok": False, "message": "No captcha found on page"})
         except Exception as e:
             try:
                 _filler_driver.switch_to.default_content()
