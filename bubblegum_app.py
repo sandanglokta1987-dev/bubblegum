@@ -1529,28 +1529,95 @@ class QuietHandler(SimpleHTTPRequestHandler):
             return
         try:
             from selenium.webdriver.common.by import By
+            driver = _filler_driver
             with _filler_lock:
-                # Try reCAPTCHA iframe
-                iframes = _filler_driver.find_elements(By.CSS_SELECTOR, 'iframe[src*="recaptcha/api2/anchor"]')
+                # Step 1: Move any captcha container into view and make it fully visible
+                driver.execute_script("""
+                    // Find all reCAPTCHA/hCaptcha containers and make them visible + centered
+                    var containers = document.querySelectorAll(
+                        '.g-recaptcha, .h-captcha, [data-sitekey], .grecaptcha-badge, .recaptcha-container'
+                    );
+                    containers.forEach(function(c) {
+                        c.style.position = 'relative';
+                        c.style.left = '0';
+                        c.style.right = 'auto';
+                        c.style.zIndex = '99999';
+                        c.style.opacity = '1';
+                        c.style.visibility = 'visible';
+                        c.style.display = 'block';
+                        c.style.overflow = 'visible';
+                        c.scrollIntoView({block: 'center'});
+                    });
+                    // Also fix any recaptcha iframes that are off-screen
+                    var iframes = document.querySelectorAll('iframe[src*="recaptcha"], iframe[src*="hcaptcha"]');
+                    iframes.forEach(function(f) {
+                        var p = f.parentElement;
+                        if (p) {
+                            p.style.position = 'relative';
+                            p.style.left = '0';
+                            p.style.right = 'auto';
+                            p.style.overflow = 'visible';
+                            p.style.zIndex = '99999';
+                        }
+                        f.scrollIntoView({block: 'center'});
+                    });
+                    // Move the grecaptcha-badge (invisible recaptcha) into view
+                    var badge = document.querySelector('.grecaptcha-badge');
+                    if (badge) {
+                        badge.style.right = 'auto';
+                        badge.style.left = '10px';
+                        badge.style.bottom = '10px';
+                        badge.style.width = '256px';
+                        badge.style.height = '60px';
+                        badge.style.overflow = 'visible';
+                        badge.style.opacity = '1';
+                        badge.style.visibility = 'visible';
+                    }
+                """)
+                time.sleep(0.5)
+
+                # Step 2: Try reCAPTCHA checkbox iframe
+                iframes = driver.find_elements(By.CSS_SELECTOR, 'iframe[src*="recaptcha/api2/anchor"]')
                 if iframes:
-                    _filler_driver.switch_to.frame(iframes[0])
-                    checkbox = _filler_driver.find_element(By.CSS_SELECTOR, '.recaptcha-checkbox-border, #recaptcha-anchor')
-                    checkbox.click()
-                    _filler_driver.switch_to.default_content()
+                    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", iframes[0])
+                    time.sleep(0.3)
+                    driver.switch_to.frame(iframes[0])
+                    checkbox = driver.find_element(By.CSS_SELECTOR, '.recaptcha-checkbox-border, #recaptcha-anchor')
+                    try:
+                        checkbox.click()
+                    except Exception:
+                        driver.execute_script("arguments[0].click();", checkbox)
+                    driver.switch_to.default_content()
                     self._send_json(200, {"ok": True, "message": "Clicked reCAPTCHA checkbox"})
                     return
 
-                # Try hCaptcha iframe
-                iframes = _filler_driver.find_elements(By.CSS_SELECTOR, 'iframe[src*="hcaptcha.com"]')
+                # Step 3: Try invisible reCAPTCHA — execute programmatically
+                has_invisible = driver.execute_script("""
+                    if (typeof grecaptcha !== 'undefined' && grecaptcha.execute) {
+                        try { grecaptcha.execute(); return 'executed'; } catch(e) { return 'error:' + e.message; }
+                    }
+                    return 'none';
+                """)
+                if has_invisible == 'executed':
+                    self._send_json(200, {"ok": True, "message": "Triggered invisible reCAPTCHA — solver should handle it"})
+                    return
+
+                # Step 4: Try hCaptcha iframe
+                iframes = driver.find_elements(By.CSS_SELECTOR, 'iframe[src*="hcaptcha.com"]')
                 if iframes:
-                    _filler_driver.switch_to.frame(iframes[0])
-                    checkbox = _filler_driver.find_element(By.CSS_SELECTOR, '#checkbox')
-                    checkbox.click()
-                    _filler_driver.switch_to.default_content()
+                    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", iframes[0])
+                    time.sleep(0.3)
+                    driver.switch_to.frame(iframes[0])
+                    checkbox = driver.find_element(By.CSS_SELECTOR, '#checkbox')
+                    try:
+                        checkbox.click()
+                    except Exception:
+                        driver.execute_script("arguments[0].click();", checkbox)
+                    driver.switch_to.default_content()
                     self._send_json(200, {"ok": True, "message": "Clicked hCaptcha checkbox"})
                     return
 
-                self._send_json(200, {"ok": False, "message": "No captcha checkbox found on page"})
+                self._send_json(200, {"ok": False, "message": "No captcha found on page"})
         except Exception as e:
             try:
                 _filler_driver.switch_to.default_content()
