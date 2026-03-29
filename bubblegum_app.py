@@ -1800,17 +1800,36 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
         form_url = data.get('url', '').strip()
         pdf_path = data.get('pdf_path', '').strip()
-        form_data = data.get('form_data', {})  # {field_name: value}
+        pdf_b64 = data.get('pdf_b64', '')
+        pdf_name = data.get('pdf_name', 'upload.pdf')
+        form_data = data.get('form_data', {})
 
-        if not form_url or not pdf_path:
-            self._send_json(400, {"error": "Missing url or pdf_path"})
+        if not form_url:
+            self._send_json(400, {"error": "Missing url"})
             return
-        if not os.path.isfile(pdf_path):
-            self._send_json(400, {"error": f"File not found: {pdf_path}"})
+
+        # Get PDF bytes from base64 or file path
+        pdf_bytes = None
+        if pdf_b64:
+            try:
+                pdf_bytes = base64.b64decode(pdf_b64)
+                pdf_filename = pdf_name
+            except Exception:
+                self._send_json(400, {"error": "Invalid base64 data"})
+                return
+        elif pdf_path:
+            if not os.path.isfile(pdf_path):
+                self._send_json(400, {"error": f"File not found: {pdf_path}"})
+                return
+            with open(pdf_path, 'rb') as f:
+                pdf_bytes = f.read()
+            pdf_filename = os.path.basename(pdf_path)
+        else:
+            self._send_json(400, {"error": "No PDF file provided"})
             return
 
         try:
-            result = _direct_upload_pdf(form_url, pdf_path, form_data)
+            result = _direct_upload_pdf(form_url, pdf_bytes, pdf_filename, form_data)
             self._send_json(200, result)
         except Exception as e:
             self._send_json(500, {"error": str(e)[:500]})
@@ -1818,7 +1837,7 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
 # ── Direct PDF Upload (MIME spoof) ───────────────────────────────────────────
 
-def _direct_upload_pdf(form_url, pdf_path, extra_fields=None):
+def _direct_upload_pdf(form_url, pdf_bytes, pdf_filename, extra_fields=None):
     """Fetch form page, extract fields, POST with PDF MIME-spoofed as image."""
     ctx = ssl.create_default_context()
 
@@ -1888,9 +1907,7 @@ def _direct_upload_pdf(form_url, pdf_path, extra_fields=None):
             )
 
     # Add the PDF file with MIME type spoofed as image/jpeg
-    pdf_filename = os.path.basename(pdf_path)
-    with open(pdf_path, 'rb') as f:
-        pdf_data = f.read()
+    pdf_data = pdf_bytes
 
     body_parts.append(
         f'--{boundary}\r\n'

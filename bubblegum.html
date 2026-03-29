@@ -1216,7 +1216,7 @@ async function duUpload() {
   const url = $('duUrl').value.trim();
   const filePath = $('duFilePath').value.trim();
   if (!url) { alert('Enter the form page URL'); return; }
-  if (!filePath) { alert('Select or enter a PDF file path'); return; }
+  if (!filePath && !window._duFileB64) { alert('Select or enter a PDF file path'); return; }
 
   // Parse extra fields
   const fieldsText = $('duFields').value.trim();
@@ -1233,14 +1233,22 @@ async function duUpload() {
   $('duUploadBtn').disabled = true;
   $('duUploadBtn').textContent = 'Uploading...';
 
-  duLog(`Uploading ${filePath} to ${url}`, 'info');
+  const payload = { url, form_data: formData };
+  if (window._duFileB64) {
+    payload.pdf_b64 = window._duFileB64;
+    payload.pdf_name = window._duFileName;
+  } else {
+    payload.pdf_path = filePath;
+  }
+
+  duLog(`Uploading ${payload.pdf_name || filePath} to ${url}`, 'info');
   duLog('Fetching form page, extracting fields...', 'info');
 
   try {
     const res = await fetch('/direct-upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, pdf_path: filePath, form_data: formData })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
 
@@ -1377,8 +1385,13 @@ document.addEventListener('DOMContentLoaded', () => {
   $('duUploadBtn').addEventListener('click', duUpload);
   $('duFileInput').addEventListener('change', function() {
     if (this.files.length) {
-      $('duFileName').textContent = this.files[0].name;
-      $('duFilePath').value = this.files[0].name;
+      const file = this.files[0];
+      $('duFileName').textContent = file.name;
+      $('duFilePath').value = file.name;
+      // Read file as base64 for upload
+      const reader = new FileReader();
+      reader.onload = () => { window._duFileB64 = reader.result.split(',')[1]; window._duFileName = file.name; };
+      reader.readAsDataURL(file);
     }
   });
   document.querySelectorAll('#tierSwitcher .tier-btn').forEach(b => b.addEventListener('click', () => switchTier(b.dataset.tier)));
