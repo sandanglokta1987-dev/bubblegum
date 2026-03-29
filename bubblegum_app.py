@@ -1814,6 +1814,15 @@ class QuietHandler(SimpleHTTPRequestHandler):
         pdf_name = data.get('pdf_name', 'upload.pdf')
         form_data = data.get('form_data', {})
 
+        # Set AI keys for _call_ai_api()
+        global _filler_ai_key, _filler_oai_key, _filler_ai_model
+        if data.get('ai_key'):
+            _filler_ai_key = data['ai_key']
+        if data.get('oai_key'):
+            _filler_oai_key = data['oai_key']
+        if data.get('ai_model'):
+            _filler_ai_model = data['ai_model']
+
         if not form_url:
             self._send_json(400, {"error": "Missing url"})
             return
