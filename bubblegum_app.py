@@ -1591,15 +1591,29 @@ class QuietHandler(SimpleHTTPRequestHandler):
                     self._send_json(200, {"ok": True, "message": "Clicked reCAPTCHA checkbox"})
                     return
 
-                # Step 3: Try invisible reCAPTCHA — execute programmatically
+                # Step 3: Invisible reCAPTCHA — click the form's own submit button
+                # so the form's JS triggers grecaptcha.execute() naturally.
+                # The solver will intercept the challenge and solve it in real time.
                 has_invisible = driver.execute_script("""
-                    if (typeof grecaptcha !== 'undefined' && grecaptcha.execute) {
-                        try { grecaptcha.execute(); return 'executed'; } catch(e) { return 'error:' + e.message; }
+                    if (typeof grecaptcha === 'undefined') return 'none';
+                    var btn = document.querySelector(
+                        'input[type="submit"], button[type="submit"], .gform_button, '
+                        + '.submit-btn, button.submit, #submit, .nf-element[type="submit"], '
+                        + '.wpforms-submit, .frm_button_submit, .wpcf7-submit, '
+                        + 'button[name="submit"], input[name="submit"]'
+                    );
+                    if (btn) {
+                        btn.scrollIntoView({block: 'center'});
+                        btn.click();
+                        return 'clicked';
                     }
-                    return 'none';
+                    return 'no_button';
                 """)
-                if has_invisible == 'executed':
-                    self._send_json(200, {"ok": True, "message": "Triggered invisible reCAPTCHA — solver should handle it"})
+                if has_invisible == 'clicked':
+                    self._send_json(200, {"ok": True, "message": "Clicked Submit — solver will handle invisible reCAPTCHA"})
+                    return
+                if has_invisible == 'no_button':
+                    self._send_json(200, {"ok": False, "message": "Invisible reCAPTCHA detected but no submit button found"})
                     return
 
                 # Step 4: Try hCaptcha iframe
