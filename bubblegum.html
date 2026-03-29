@@ -1040,6 +1040,15 @@ async function ffFillStep(pos) {
     $('ffLiveBadge').textContent = `${pos + 1}/${ffSchedule.length}`;
     ffLog(`[${pos+1}/${ffSchedule.length}] ${job.name} row ${step.rowIdx+1}: ${(data.filled||[]).length} fields filled`, 'ok');
     if (data.errors?.length) for (const err of data.errors) ffLog(err, 'warn');
+    if (data.second_pass) {
+      const sp = data.second_pass;
+      if (sp.filled > 0) ffLog(`Second pass: ${sp.filled}/${sp.found} remaining fields filled by AI`, 'ok');
+      else if (sp.found > 0) ffLog(`Second pass: found ${sp.found} empty fields but filled ${sp.filled}`, 'warn');
+      if (sp.errors?.length) for (const err of sp.errors) ffLog(err, 'warn');
+    } else {
+      ffLog('All fields filled \u2714', 'ok');
+    }
+    show('ffCaptchaBtn');
     ffLog('Review and submit, then click "Next Row"', 'info');
     $('ffStatus').innerHTML = `<span class="count">${pos+1}</span> of <span class="count">${ffSchedule.length}</span> &middot; ${esc(job.name)} row ${step.rowIdx+1}`;
 
@@ -1075,7 +1084,7 @@ async function ffStart() {
   ffLog(`Starting: ${ffJobs.length} sites, ${ffSchedule.length} rows (round-robin)`, 'info');
   for (const j of ffJobs) ffLog(`  ${j.name}: ${j.rowCount} rows`, 'info');
 
-  ffActive = true; hide('ffStartBtn'); show('ffNextBtn'); show('ffCaptchaBtn'); show('ffStopBtn'); show('ffLiveBadge');
+  ffActive = true; hide('ffStartBtn'); show('ffNextBtn'); hide('ffCaptchaBtn'); show('ffStopBtn'); show('ffLiveBadge');
   $('ffLiveBadge').classList.add('active');
 
   await ffFillStep(0);
@@ -1083,6 +1092,7 @@ async function ffStart() {
 
 async function ffNext() {
   $('ffNextBtn').disabled = true; $('ffNextBtn').textContent = 'Loading...';
+  hide('ffCaptchaBtn');
 
   // Mark previous as submitted
   if (ffResultsData.length) ffResultsData[ffResultsData.length - 1].status = 'submitted';
