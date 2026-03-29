@@ -1151,13 +1151,23 @@ def _check_pdf_urls(page_url):
 
     path_patterns = [
         f"/wp-content/uploads/event-manager-uploads/event_banner/{now}/{{f}}",
+        f"/wp-content/uploads/event-manager-uploads/{now}/{{f}}",
+        f"/wp-content/uploads/event_banner/{now}/{{f}}",
+        f"/wp-content/uploads/events/{now}/{{f}}",
+        f"/wp-content/uploads/event-manager/{now}/{{f}}",
         f"/wp-content/uploads/{now}/{{f}}",
-        f"/wp-content/uploads/wpforms/{{f}}",
-        f"/wp-content/uploads/formidable/{{f}}",
-        f"/wp-content/uploads/gravity_forms/{{f}}",
-        f"/wp-content/uploads/ninja-forms/{{f}}",
-        f"/wp-content/uploads/wpcf7_uploads/{{f}}",
+        f"/wp-content/uploads/wpem-uploads/{now}/{{f}}",
+        f"/wp-content/uploads/wpforms/{now}/{{f}}",
+        f"/wp-content/uploads/gravity_forms/{now}/{{f}}",
+        f"/wp-content/uploads/formidable/{now}/{{f}}",
+        f"/wp-content/uploads/ninja-forms/{now}/{{f}}",
+        f"/wp-content/uploads/wpcf7_uploads/{now}/{{f}}",
+        f"/wp-content/uploads/caldera/{now}/{{f}}",
+        f"/wp-content/uploads/event-manager-uploads/event_banner/{{f}}",
+        f"/wp-content/uploads/event-manager-uploads/{{f}}",
         f"/wp-content/uploads/{{f}}",
+        f"/uploads/{now}/{{f}}",
+        f"/uploads/{{f}}",
     ]
 
     results = {"verified": [], "candidates": []}
@@ -1957,10 +1967,27 @@ def _direct_upload_pdf(form_url, pdf_bytes, pdf_filename, extra_fields=None):
     # Step 5: Try to find the PDF URL
     now = time.strftime('%Y/%m')
     pdf_fname = urllib.parse.quote(pdf_filename)
+    year = time.strftime('%Y')
+    month = time.strftime('%m')
     candidates = [
         f"{base}/wp-content/uploads/event-manager-uploads/event_banner/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/event-manager-uploads/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/event_banner/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/events/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/event-manager/{now}/{pdf_fname}",
         f"{base}/wp-content/uploads/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/wpem-uploads/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/wpforms/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/gravity_forms/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/formidable/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/ninja-forms/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/wpcf7_uploads/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/caldera/{now}/{pdf_fname}",
+        f"{base}/wp-content/uploads/event-manager-uploads/event_banner/{pdf_fname}",
+        f"{base}/wp-content/uploads/event-manager-uploads/{pdf_fname}",
         f"{base}/wp-content/uploads/{pdf_fname}",
+        f"{base}/uploads/{now}/{pdf_fname}",
+        f"{base}/uploads/{pdf_fname}",
     ]
 
     verified_url = None
@@ -1980,7 +2007,7 @@ def _direct_upload_pdf(form_url, pdf_bytes, pdf_filename, extra_fields=None):
         "message": message,
         "status": status,
         "pdf_url": verified_url,
-        "candidates": candidates if not verified_url else [],
+        "candidates": candidates[:6] if not verified_url else [],
         "file_field": file_field,
         "hidden_fields_count": len(hidden_fields),
         "action_url": action_url
