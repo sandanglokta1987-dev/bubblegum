@@ -1402,15 +1402,25 @@ class QuietHandler(SimpleHTTPRequestHandler):
         _filler_index = 0
         _filler_results = []
 
+        # Kill any leftover browser from a previous session
+        _close_filler_driver()
+
         # Open visible browser and navigate
         with _filler_lock:
             try:
                 driver = _get_filler_driver()
                 driver.get(first_url)
                 time.sleep(2)
-            except Exception as e:
-                self._send_json(500, {"error": f"Browser launch failed: {e}"})
-                return
+            except Exception:
+                print("[filler] Browser timed out on start — restarting...", flush=True)
+                _close_filler_driver()
+                try:
+                    driver = _get_filler_driver()
+                    driver.get(first_url)
+                    time.sleep(2)
+                except Exception as e2:
+                    self._send_json(500, {"error": f"Browser launch failed after retry: {e2}"})
+                    return
 
         # Fill first row
         with _filler_lock:
@@ -1487,9 +1497,18 @@ class QuietHandler(SimpleHTTPRequestHandler):
                 driver.get(next_url)
                 _filler_url = next_url
                 time.sleep(2)
-            except Exception as e:
-                self._send_json(500, {"error": f"Navigation failed: {e}"})
-                return
+            except Exception:
+                # Browser died — kill it, spawn fresh, retry once
+                print("[filler] Browser timed out — restarting...", flush=True)
+                _close_filler_driver()
+                try:
+                    driver = _get_filler_driver()
+                    driver.get(next_url)
+                    _filler_url = next_url
+                    time.sleep(2)
+                except Exception as e2:
+                    self._send_json(500, {"error": f"Navigation failed after retry: {e2}"})
+                    return
 
             result = _fill_current_row()
 
