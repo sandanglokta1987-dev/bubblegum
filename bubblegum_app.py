@@ -1964,43 +1964,76 @@ def _direct_upload_pdf(form_url, pdf_bytes, pdf_filename, extra_fields=None):
                 message = f'Server returned {status} — check PDF URL manually'
                 success = True  # might have worked
 
-    # Step 5: Try to find the PDF URL
-    now = time.strftime('%Y/%m')
+    # Step 5: Find the PDF URL via Serper search + HEAD verify
     pdf_fname = urllib.parse.quote(pdf_filename)
-    year = time.strftime('%Y')
-    month = time.strftime('%m')
-    candidates = [
-        f"{base}/wp-content/uploads/event-manager-uploads/event_banner/{now}/{pdf_fname}",
-        f"{base}/wp-content/uploads/event-manager-uploads/{now}/{pdf_fname}",
-        f"{base}/wp-content/uploads/event_banner/{now}/{pdf_fname}",
-        f"{base}/wp-content/uploads/events/{now}/{pdf_fname}",
-        f"{base}/wp-content/uploads/event-manager/{now}/{pdf_fname}",
-        f"{base}/wp-content/uploads/{now}/{pdf_fname}",
-        f"{base}/wp-content/uploads/wpem-uploads/{now}/{pdf_fname}",
-        f"{base}/wp-content/uploads/wpforms/{now}/{pdf_fname}",
-        f"{base}/wp-content/uploads/gravity_forms/{now}/{pdf_fname}",
-        f"{base}/wp-content/uploads/formidable/{now}/{pdf_fname}",
-        f"{base}/wp-content/uploads/ninja-forms/{now}/{pdf_fname}",
-        f"{base}/wp-content/uploads/wpcf7_uploads/{now}/{pdf_fname}",
-        f"{base}/wp-content/uploads/caldera/{now}/{pdf_fname}",
-        f"{base}/wp-content/uploads/event-manager-uploads/event_banner/{pdf_fname}",
-        f"{base}/wp-content/uploads/event-manager-uploads/{pdf_fname}",
-        f"{base}/wp-content/uploads/{pdf_fname}",
-        f"{base}/uploads/{now}/{pdf_fname}",
-        f"{base}/uploads/{pdf_fname}",
-    ]
-
+    domain = parsed_url.netloc.replace('www.', '')
     verified_url = None
-    for url in candidates:
-        try:
-            check = urllib.request.Request(url, method='HEAD')
-            check.add_header('User-Agent', 'Mozilla/5.0')
-            check_resp = urllib.request.urlopen(check, timeout=5, context=ctx)
-            if check_resp.status == 200:
-                verified_url = url
-                break
-        except Exception:
-            pass
+    candidates = []
+
+    # Search Google for existing PDFs on this domain to discover upload paths
+    try:
+        serper_payload = json.dumps({"q": f"site:{domain} filetype:pdf", "num": 10}).encode()
+        serper_req = urllib.request.Request(
+            'https://google.serper.dev/search',
+            data=serper_payload, method='POST',
+            headers={
+                'X-API-KEY': '3de237aef5a3f8140563b57f7b7ce95450960657',
+                'Content-Type': 'application/json'
+            }
+        )
+        serper_resp = urllib.request.urlopen(serper_req, timeout=10, context=ctx)
+        serper_data = json.loads(serper_resp.read().decode())
+
+        # Extract unique directory paths from search results
+        seen_dirs = []
+        for item in serper_data.get('organic', []):
+            link = item.get('link', '')
+            if '.pdf' in link.lower():
+                # Get the directory part (everything before the last /)
+                dir_path = link.rsplit('/', 1)[0] + '/'
+                if dir_path not in seen_dirs:
+                    seen_dirs.append(dir_path)
+
+        print(f"[pdf-detect] Serper found {len(seen_dirs)} upload paths on {domain}", flush=True)
+
+        # Try each discovered path with our filename
+        for dir_url in seen_dirs:
+            candidate = dir_url + pdf_fname
+            candidates.append(candidate)
+            try:
+                check = urllib.request.Request(candidate, method='HEAD')
+                check.add_header('User-Agent', 'Mozilla/5.0')
+                check_resp = urllib.request.urlopen(check, timeout=5, context=ctx)
+                if check_resp.status == 200:
+                    verified_url = candidate
+                    print(f"[pdf-detect] FOUND via search: {verified_url}", flush=True)
+                    break
+            except Exception:
+                pass
+
+    except Exception as e:
+        print(f"[pdf-detect] Serper search failed: {e}", flush=True)
+
+    # Fallback: static path guessing if search found nothing
+    if not verified_url and not candidates:
+        now = time.strftime('%Y/%m')
+        fallback = [
+            f"{base}/wp-content/uploads/{now}/{pdf_fname}",
+            f"{base}/wp-content/uploads/event-manager-uploads/event_banner/{now}/{pdf_fname}",
+            f"{base}/wp-content/uploads/formidable/1/{pdf_fname}",
+            f"{base}/wp-content/uploads/{pdf_fname}",
+        ]
+        for url in fallback:
+            candidates.append(url)
+            try:
+                check = urllib.request.Request(url, method='HEAD')
+                check.add_header('User-Agent', 'Mozilla/5.0')
+                check_resp = urllib.request.urlopen(check, timeout=5, context=ctx)
+                if check_resp.status == 200:
+                    verified_url = url
+                    break
+            except Exception:
+                pass
 
     return {
         "ok": success,
