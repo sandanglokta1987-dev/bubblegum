@@ -731,6 +731,60 @@ def _fill_current_row():
     }
 
 
+# ── Strip File Type Validation (allow PDF uploads) ───────────────────────────
+
+_STRIP_FILE_VALIDATION_JS = """
+(function() {
+    // 1. Remove accept attribute from all file inputs
+    document.querySelectorAll('input[type="file"]').forEach(function(el) {
+        el.removeAttribute('accept');
+        el.removeAttribute('data-allowed-types');
+        el.removeAttribute('data-file-types');
+        // Kill any onchange validation
+        el.onchange = null;
+        // Clone to strip event listeners
+        var clone = el.cloneNode(true);
+        if (el.files && el.files.length > 0) {
+            // Can't transfer files to clone, so just strip accept and keep original
+            el.removeAttribute('accept');
+        } else {
+            el.parentNode.replaceChild(clone, el);
+        }
+    });
+
+    // 2. Override WP Event Manager file validation
+    if (typeof jQuery !== 'undefined') {
+        jQuery(document).off('submit.validate change.validate');
+        // Event Manager: disable file type check
+        if (typeof wpem_form !== 'undefined') wpem_form.file_validation = function() { return true; };
+        if (typeof wp_event_manager_form !== 'undefined') wp_event_manager_form.file_validation = function() { return true; };
+        // Remove WP Event Manager error handlers
+        jQuery('.wpem-alert, .wpem-error, .file-error').remove();
+    }
+
+    // 3. Override form onsubmit validation
+    document.querySelectorAll('form').forEach(function(f) {
+        f.removeAttribute('onsubmit');
+        // Override novalidate
+        f.setAttribute('novalidate', 'novalidate');
+    });
+
+    // 4. Override common validation functions
+    if (typeof gform_fileupload_check === 'function') window.gform_fileupload_check = function() { return true; };
+    if (typeof forminator_validate_file === 'function') window.forminator_validate_file = function() { return true; };
+
+    // 5. Intercept custom validity messages on file inputs
+    document.querySelectorAll('input[type="file"]').forEach(function(el) {
+        el.setCustomValidity('');
+        var origSet = el.setCustomValidity.bind(el);
+        el.setCustomValidity = function() { return origSet(''); };
+    });
+
+    return 'ok';
+})();
+"""
+
+
 # ── Second Pass: Fill Empty Required Fields ──────────────────────────────────
 
 _SCAN_ALL_EMPTY_JS = r"""
@@ -1519,6 +1573,12 @@ class QuietHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f"[second-pass] Error: {e}", flush=True)
 
+        # Strip file type validation so PDFs can be uploaded
+        try:
+            _filler_driver.execute_script(_STRIP_FILE_VALIDATION_JS)
+        except Exception:
+            pass
+
         # Capture PDF filenames from CSV + file inputs (check URLs later after submission)
         try:
             _capture_pdf_filenames(rows[0], _filler_driver)
@@ -1541,6 +1601,10 @@ class QuietHandler(SimpleHTTPRequestHandler):
                     result['second_pass'] = sp
             except Exception as e:
                 print(f"[second-pass] Error: {e}", flush=True)
+        try:
+            _filler_driver.execute_script(_STRIP_FILE_VALIDATION_JS)
+        except Exception:
+            pass
         self._send_json(200, result)
 
     def _handle_filler_next(self):
@@ -1618,6 +1682,11 @@ class QuietHandler(SimpleHTTPRequestHandler):
                     result['second_pass'] = sp
             except Exception as e:
                 print(f"[second-pass] Error: {e}", flush=True)
+
+            try:
+                _filler_driver.execute_script(_STRIP_FILE_VALIDATION_JS)
+            except Exception:
+                pass
 
         # Attach PDF results from the PREVIOUS row's submission
         if pdf_result:
